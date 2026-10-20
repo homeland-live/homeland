@@ -1,0 +1,16 @@
+# Allowlist: send the builder only what the Dockerfile copies. This keeps .env
+# (secrets), the local database, binaries and the host's node_modules (with
+# platform-specific binaries) out of the build context.
+*
+!go.mod
+!go.sum
+!Makefile
+!cmd/
+!internal/
+!ui/
+
+# Rebuilt inside the image.
+ui/node_modules/
+ui/dist/
+ui/.eslintcache
+**/.DS_Store

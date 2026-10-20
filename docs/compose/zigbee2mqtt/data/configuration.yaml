@@ -1,0 +1,25 @@
+# Minimal Zigbee2MQTT configuration for the example stack. Zigbee2MQTT adds
+# its own settings (network key, version, ...) to this file on first start.
+# Reference: https://www.zigbee2mqtt.io/guide/configuration/
+mqtt:
+  server: mqtt://mosquitto:1883
+  base_topic: zigbee2mqtt
+
+serial:
+  # Must match the device mapped in docker-compose.yaml.
+  port: /dev/ttyUSB0
+  # Uncomment and set when your coordinator isn't auto-detected
+  # (e.g. zstack, ember, deconz, zigate).
+  # adapter: zstack
+
+frontend:
+  enabled: true
+  port: 8080
+
+homeassistant:
+  enabled: false
+
+# Required by Homeland: retain device state, so it knows every device's
+# latest state after a restart.
+device_options:
+  retain: true

@@ -1,0 +1,72 @@
+package z2m
+
+// accessPublished is bit 1 of an expose's access bitmask: the property appears
+// in the device's published state. The full 3-bit mask (see
+// https://www.zigbee2mqtt.io/guide/usage/exposes.html#access) is:
+//
+//	bit 1 (1): property appears in the device's published state
+//	bit 2 (2): property can be written with a /set command
+//	bit 3 (4): property can be retrieved with a /get command
+const accessPublished = 1 << 0 // 1
+
+// propAction is z2m's property for momentary button/remote events.
+const propAction = "action"
+
+// StateSchema splits a device's published state properties by z2m expose
+// category: primary ones have no category (regular usage such as state or
+// sensor readings), secondary ones are config or diagnostic (battery,
+// linkquality, ...). Each maps a property name to its expose type.
+type StateSchema struct {
+	PrimaryProps   map[string]string `json:"primaryProps"`
+	SecondaryProps map[string]string `json:"secondaryProps"`
+}
+
+// addProp records e as a top-level key once, under the first expose
+// declaring it, when it has a property and is published (access bit 1). Its
+// features are nested under it in state (level_config: {...}), not keys of
+// their own. s must come from NewStateSchema: addProp writes to its maps.
+func (s *StateSchema) addProp(e Expose) {
+	if e.Property == "" || e.Access&accessPublished == 0 || s.hasProp(e.Property) {
+		return
+	}
+	if e.Category == "" || e.Property == propAction {
+		s.PrimaryProps[e.Property] = e.Type
+	} else {
+		s.SecondaryProps[e.Property] = e.Type
+	}
+}
+
+// hasProp reports whether prop is in either bucket.
+func (s *StateSchema) hasProp(prop string) bool {
+	_, primary := s.PrimaryProps[prop]
+	_, secondary := s.SecondaryProps[prop]
+	return primary || secondary
+}
+
+// NewStateSchema derives the schema from the top-level state keys a
+// definition publishes (access bit 1): exposes with a property, and the
+// features of grouping exposes (light, switch, ...), which z2m publishes at
+// top level. It looks one grouping level deep, which is all z2m produces.
+// "action" is always primary. Props z2m adds outside the exposes, such as
+// last_seen, are not included. A nil definition yields nil.
+func NewStateSchema(devdef *DeviceDefinition) *StateSchema {
+	if devdef == nil {
+		return nil
+	}
+	schema := &StateSchema{
+		PrimaryProps:   make(map[string]string),
+		SecondaryProps: make(map[string]string),
+	}
+	for _, e := range devdef.Exposes {
+		if e.Property != "" {
+			schema.addProp(e)
+			continue
+		}
+		// A grouping expose has no key of its own; its features are
+		// published at top level.
+		for _, f := range e.Features {
+			schema.addProp(f)
+		}
+	}
+	return schema
+}

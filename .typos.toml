@@ -1,0 +1,6 @@
+[files]
+extend-exclude = [
+    "internal/z2m/test/fixtures/**",
+]
+[default.extend-words]
+mosquitto = "mosquitto"

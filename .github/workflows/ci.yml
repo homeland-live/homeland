@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+  pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+
+jobs:
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hadolint/hadolint-action@v3.5.0
+        with:
+          ignore: DL3018
+  server-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0 # keep in sync with lint-install in the Makefile
+  server-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: make test-install test
+        env:
+          TZ: Europe/Berlin
+  ui-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.22'
+      - name: Lint & Test
+        run: cd ui && npm ci && npm run ci

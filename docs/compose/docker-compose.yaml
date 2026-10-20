@@ -1,0 +1,52 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.1-alpine
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - 1883:1883
+    user: 1000:1000 # must own ./mosquitto (check with `id -u` and `id -g`)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+    environment:
+      TZ: Europe/Berlin
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:2
+    container_name: zigbee2mqtt
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    ports:
+      - 8081:8080
+    volumes:
+      - ./zigbee2mqtt/data:/app/data
+      - /run/udev:/run/udev:ro
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    environment:
+      TZ: Europe/Berlin
+  homeland:
+    image: ghcr.io/homeland-live/homeland:latest
+    container_name: homeland
+    restart: always
+    depends_on:
+      - zigbee2mqtt
+    ports:
+      - 8082:8080
+    # Runs as uid 1000, which must be able to write ./homeland/data.
+    volumes:
+      - ./homeland/scripts:/app/scripts
+      - ./homeland/data:/app/data
+    environment:
+      TZ: Europe/Berlin
+      LOG_LEVEL: debug
+      HL_HTTP_PORT: "8080"
+      HL_DB_PATH: /app/data/homeland.db
+      HL_Z2M_MQTT_BROKER: tcp://mosquitto:1883
+      HL_Z2M_MQTT_CLIENT_ID: homeland
+      HL_Z2M_MQTT_USERNAME: ""
+      HL_Z2M_MQTT_PASSWORD: ""
+      HL_Z2M_MQTT_BASE_TOPIC: zigbee2mqtt
+      HL_SCRIPTS_DIR: /app/scripts
+      HL_SCRIPTS_WATCHER: "false"

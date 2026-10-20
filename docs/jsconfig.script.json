@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "noEmit": true,
+    "lib": ["es2020"],
+    "module": "commonjs"
+  },
+  "include": ["script.d.ts", "../scripts/*.js", "compose/homeland/scripts/*.js"]
+}

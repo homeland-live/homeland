@@ -1,0 +1,39 @@
+version: 2
+# Major updates (e.g. Node 24 -> 26, TypeScript 6 -> 7) are done by hand.
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(server)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(ui)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(ci)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(docker)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

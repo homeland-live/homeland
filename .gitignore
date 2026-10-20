@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Go
+/bin/
+/coverage.txt
+
+# Docker
+/.env
+
+# App
+/data/
+/scripts/
+
+# Docs
+/docs/compose/mosquitto/data/*
+/docs/compose/homeland/data/*
+/docs/compose/zigbee2mqtt/data/*
+!/docs/compose/**/.gitkeep
+!/docs/compose/zigbee2mqtt/data/configuration.yaml
