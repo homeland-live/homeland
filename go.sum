@@ -4,8 +4,8 @@ github.com/avakarev/go-util v1.13.4 h1:DvBu/51Df02mOdRaLYjM5Ga9Yh5y3WVhNnqZUBkmE
 github.com/avakarev/go-util v1.13.4/go.mod h1:mCJOBHzYBU1RHrWhz7Guy/MxtPMqWRyxWKaEzaQe36Q=
 github.com/dlclark/regexp2/v2 v2.8.1 h1:I1jbaCbXeOxdVN8z3fb55Mvtgb94/6+Dh0zjmXjKV/0=
 github.com/dlclark/regexp2/v2 v2.8.1/go.mod h1:avUrQvPaLz2DrFNHJF0taWAFFX2C1GMSSoeiqFjcBmU=
-github.com/dop251/goja v0.0.0-20261014135309-2cb8274eed06 h1:r8PdcvqyLRXlJ3JBirFPOdKKNoDpXvXTIoU/Oos9BTY=
-github.com/dop251/goja v0.0.0-20261014135309-2cb8274eed06/go.mod h1:Cp9NYOLrEKg/ypIRkUWYXWLuKAyyFGkDmGeJ95Sw0zI=
+github.com/dop251/goja v0.0.0-20261021125811-a6ef56644a78 h1:NylFfowas1yoqjtzXi2Y56ej99gfFmwIHYuOcaSD5II=
+github.com/dop251/goja v0.0.0-20261021125811-a6ef56644a78/go.mod h1:Cp9NYOLrEKg/ypIRkUWYXWLuKAyyFGkDmGeJ95Sw0zI=
 github.com/eclipse/paho.mqtt.golang v1.5.1 h1:/VSOv3oDLlpqR2Epjn1Q7b2bSTplJIeV2ISgCl2W7nE=
 github.com/eclipse/paho.mqtt.golang v1.5.1/go.mod h1:1/yJCneuyOoCOzKSsOTUc0AJfpsItBGWvYpBLimhArU=
 github.com/fsnotify/fsnotify v1.10.1 h1:b0/UzAf9yR5rhf3RPm9gf3ehBPpf0oZKIjtpKrx59Ho=
