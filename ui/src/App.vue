@@ -49,6 +49,7 @@ function closeOnMobile() {
         <VDivider />
         <VListItem title="Scripts" :to="{ name: 'ScriptsView' }" link @click="closeOnMobile" />
         <VDivider />
+        <VListItem title="Health" :to="{ name: 'StatusHealthView' }" link @click="closeOnMobile" />
         <VListItem
           title="BuildInfo"
           :to="{ name: 'StatusBuildView' }"

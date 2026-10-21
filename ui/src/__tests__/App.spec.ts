@@ -22,6 +22,7 @@ function makeRouter(): Router {
       { path: '/scripts', name: 'ScriptsView', component: { template: '<div />' } },
       { path: '/bridge', name: 'BridgeView', component: { template: '<div />' } },
       { path: '/status/build', name: 'StatusBuildView', component: { template: '<div />' } },
+      { path: '/status/health', name: 'StatusHealthView', component: { template: '<div />' } },
     ],
   });
 }
@@ -59,6 +60,7 @@ describe('App', () => {
     expect(text).toContain('Devices');
     expect(text).toContain('Scripts');
     expect(text).toContain('Bridge');
+    expect(text).toContain('Health');
     expect(text).toContain('BuildInfo');
   });
 

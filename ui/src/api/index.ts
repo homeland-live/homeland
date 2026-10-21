@@ -93,6 +93,27 @@ export function getDeps(name: string): Promise<Dep[]> {
   return get(`/ui/${name}-deps.json?t=${Date.now()}`).then((data) => data.deps || []);
 }
 
+// HealthCheck is one node of the server's health tree. A parent is healthy
+// only when every child is; `error` is set on an unhealthy node (for a parent
+// it names the failing children). Leaves have no `checks`.
+export interface HealthCheck {
+  name: string;
+  isHealthy: boolean;
+  error?: string;
+  checks?: HealthCheck[];
+}
+
+// getHealth fetches the health tree. The server answers 503 with the same tree
+// when unhealthy, so only a response that isn't a tree (network failure,
+// invalid JSON) is reported as `error`.
+export function getHealth(): Promise<{ health?: HealthCheck; error?: Err }> {
+  return get('/api/v1/health').then((data) =>
+    typeof data?.isHealthy === 'boolean'
+      ? { health: data as HealthCheck }
+      : { error: data?.error ?? { code: 0, msg: 'Invalid health response' } },
+  );
+}
+
 export interface BuildInfo {
   compiler: string;
   os: string;
