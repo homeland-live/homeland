@@ -4,6 +4,7 @@ import DeviceView from '@/views/DeviceView.vue';
 import ScriptsView from '@/views/ScriptsView.vue';
 import BridgeView from '@/views/BridgeView.vue';
 import StatusBuildView from '@/views/StatusBuildView.vue';
+import StatusHealthView from '@/views/StatusHealthView.vue';
 
 const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
@@ -15,6 +16,7 @@ const router = createRouter({
     { path: '/scripts', name: 'ScriptsView', component: ScriptsView },
     { path: '/bridge', name: 'BridgeView', component: BridgeView },
     { path: '/status/build', name: 'StatusBuildView', component: StatusBuildView },
+    { path: '/status/health', name: 'StatusHealthView', component: StatusHealthView },
   ],
 });
 
