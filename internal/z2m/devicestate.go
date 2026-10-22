@@ -103,17 +103,21 @@ func (state *DeviceState) IsDuplicate(other *DeviceState) bool {
 	if state == nil || other == nil || state.Has(propAction) {
 		return false
 	}
-	return sameAttrs(state.Raw, other.Raw) && sameAttrs(other.Raw, state.Raw)
+	return state.isSubsetOf(other) && other.isSubsetOf(state)
 }
 
-// sameAttrs reports whether every attribute of a that IsDuplicate compares is
-// in b with the same bytes.
-func sameAttrs(a, b map[string]json.RawMessage) bool {
-	for k, v := range a {
+// isSubsetOf reports whether every attribute of state that IsDuplicate
+// compares is in other with the same bytes. It is false when either state is
+// nil.
+func (state *DeviceState) isSubsetOf(other *DeviceState) bool {
+	if state == nil || other == nil {
+		return false
+	}
+	for k, v := range state.Raw {
 		if k == "last_seen" || k == "linkquality" || k == propAction {
 			continue
 		}
-		if w, ok := b[k]; !ok || !bytes.Equal(v, w) {
+		if w, ok := other.Raw[k]; !ok || !bytes.Equal(v, w) {
 			return false
 		}
 	}
