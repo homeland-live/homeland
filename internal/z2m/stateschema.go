@@ -24,22 +24,22 @@ type StateSchema struct {
 // addProp records e as a top-level key once, under the first expose
 // declaring it, when it has a property and is published (access bit 1). Its
 // features are nested under it in state (level_config: {...}), not keys of
-// their own. s must come from NewStateSchema: addProp writes to its maps.
-func (s *StateSchema) addProp(e Expose) {
-	if e.Property == "" || e.Access&accessPublished == 0 || s.hasProp(e.Property) {
+// their own. schema must come from NewStateSchema: addProp writes to its maps.
+func (schema *StateSchema) addProp(e Expose) {
+	if e.Property == "" || e.Access&accessPublished == 0 || schema.hasProp(e.Property) {
 		return
 	}
 	if e.Category == "" || e.Property == propAction {
-		s.PrimaryProps[e.Property] = e.Type
+		schema.PrimaryProps[e.Property] = e.Type
 	} else {
-		s.SecondaryProps[e.Property] = e.Type
+		schema.SecondaryProps[e.Property] = e.Type
 	}
 }
 
 // hasProp reports whether prop is in either bucket.
-func (s *StateSchema) hasProp(prop string) bool {
-	_, primary := s.PrimaryProps[prop]
-	_, secondary := s.SecondaryProps[prop]
+func (schema *StateSchema) hasProp(prop string) bool {
+	_, primary := schema.PrimaryProps[prop]
+	_, secondary := schema.SecondaryProps[prop]
 	return primary || secondary
 }
 
