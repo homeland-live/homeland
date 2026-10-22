@@ -26,22 +26,22 @@ type DeviceState struct {
 }
 
 // Has reports whether the state carries prop.
-func (s *DeviceState) Has(prop string) bool {
-	if s == nil || s.Raw == nil {
+func (state *DeviceState) Has(prop string) bool {
+	if state == nil || state.Raw == nil {
 		return false
 	}
-	_, has := s.Raw[prop]
+	_, has := state.Raw[prop]
 	return has
 }
 
 // Keys returns the names of every attribute present in the state, sorted
 // alphabetically.
-func (s *DeviceState) Keys() []string {
-	if s == nil || s.Raw == nil {
+func (state *DeviceState) Keys() []string {
+	if state == nil || state.Raw == nil {
 		return nil
 	}
-	keys := make([]string, 0, len(s.Raw))
-	for k := range s.Raw {
+	keys := make([]string, 0, len(state.Raw))
+	for k := range state.Raw {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -50,11 +50,11 @@ func (s *DeviceState) Keys() []string {
 
 // Value returns the decoded Go value for an attribute (string, float64, bool,
 // or nested map/slice for object/array attributes), and whether it exists.
-func (s *DeviceState) Value(name string) (any, bool) {
-	if s == nil || s.Raw == nil {
+func (state *DeviceState) Value(name string) (any, bool) {
+	if state == nil || state.Raw == nil {
 		return nil, false
 	}
-	raw, ok := s.Raw[name]
+	raw, ok := state.Raw[name]
 	if !ok {
 		return nil, false
 	}
@@ -66,13 +66,13 @@ func (s *DeviceState) Value(name string) (any, bool) {
 }
 
 // Attributes returns every attribute decoded into Go values, keyed by name.
-func (s *DeviceState) Attributes() map[string]any {
-	if s == nil || s.Raw == nil {
+func (state *DeviceState) Attributes() map[string]any {
+	if state == nil || state.Raw == nil {
 		return nil
 	}
-	out := make(map[string]any, len(s.Raw))
-	for k := range s.Raw {
-		if v, ok := s.Value(k); ok {
+	out := make(map[string]any, len(state.Raw))
+	for k := range state.Raw {
+		if v, ok := state.Value(k); ok {
 			out[k] = v
 		}
 	}
@@ -83,27 +83,27 @@ func (s *DeviceState) Attributes() map[string]any {
 // attributes, sorted by name. slog resolves it only when a record is emitted,
 // so logging a state at a disabled level decodes nothing. A nil or empty state
 // is an empty group, which handlers omit.
-func (s *DeviceState) LogValue() slog.Value {
-	keys := s.Keys()
+func (state *DeviceState) LogValue() slog.Value {
+	keys := state.Keys()
 	attrs := make([]slog.Attr, 0, len(keys))
 	for _, k := range keys {
-		v, _ := s.Value(k)
+		v, _ := state.Value(k)
 		attrs = append(attrs, slog.Any(k, v))
 	}
 	return slog.GroupValue(attrs...)
 }
 
-// IsDuplicate reports whether s repeats the previous state other: the same
+// IsDuplicate reports whether state repeats the previous state other: the same
 // attributes with byte-identical values, ignoring last_seen, linkquality and
 // action. z2m republishes a device's full cached state on every keep-alive,
 // which produces such repeats. A state that carries action is never a
 // duplicate, so a repeated button press still counts. It is false when either
 // state is nil.
-func (s *DeviceState) IsDuplicate(other *DeviceState) bool {
-	if s == nil || other == nil || s.Has(propAction) {
+func (state *DeviceState) IsDuplicate(other *DeviceState) bool {
+	if state == nil || other == nil || state.Has(propAction) {
 		return false
 	}
-	return sameAttrs(s.Raw, other.Raw) && sameAttrs(other.Raw, s.Raw)
+	return sameAttrs(state.Raw, other.Raw) && sameAttrs(other.Raw, state.Raw)
 }
 
 // sameAttrs reports whether every attribute of a that IsDuplicate compares is
@@ -127,7 +127,7 @@ func sameAttrs(a, b map[string]json.RawMessage) bool {
 // device, only presses are events. A nil schema (a device without a
 // definition) or one without primary props has nothing to require, so any
 // state validates.
-func (s *DeviceState) Validate(schema *StateSchema) error {
+func (state *DeviceState) Validate(schema *StateSchema) error {
 	if schema == nil || len(schema.PrimaryProps) == 0 {
 		return nil
 	}
@@ -139,7 +139,7 @@ func (s *DeviceState) Validate(schema *StateSchema) error {
 		if prop == propAction && !actionOnly {
 			continue
 		}
-		if !s.Has(prop) {
+		if !state.Has(prop) {
 			missing = append(missing, prop)
 		}
 	}
