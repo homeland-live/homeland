@@ -121,7 +121,7 @@ exports (for example an unknown key or a bad cron expression) is shown as broken
 ### React to device events
 
 Export `handle(state, ctx)`. It runs on every state update from that device, and `state` is the device's full
-latest state (not just the changed attributes).
+latest state (not just the changed properties).
 
 ```js
 // scripts/hallway-sensor.js

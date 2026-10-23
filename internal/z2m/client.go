@@ -163,7 +163,7 @@ func (c *Client) handle(topic string, payload []byte, retained bool) {
 // "<friendly_name>" state topic (the name may contain slashes). The "#"
 // subscription also delivers the base topic itself (""), bridge topics,
 // command topics (set, set/<prop>, get, get/<prop>) and availability, which
-// would otherwise overwrite state with a lone "state" attribute.
+// would otherwise overwrite state with a lone "state" prop.
 func isStateTopic(topic string) bool {
 	switch {
 	case topic == "", topic == "bridge", strings.HasPrefix(topic, "bridge/"):

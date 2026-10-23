@@ -25,11 +25,11 @@ func bridgeInfo(config string) []byte {
 	return []byte(`{"version":"2.6.0","config":` + config + `}`)
 }
 
-// TestFilteredAttributeIsNotRequired covers a device whose z2m options filter
-// a primary prop out of every publish: the prop leaves the schema, so states
+// TestFilteredPropIsNotRequired covers a device whose z2m options filter a
+// primary prop out of every publish: the prop leaves the schema, so states
 // without it are events. bridge/info and bridge/devices are both retained and
 // arrive in either order.
-func TestFilteredAttributeIsNotRequired(t *testing.T) {
+func TestFilteredPropIsNotRequired(t *testing.T) {
 	type message struct {
 		topic   string
 		payload []byte
@@ -126,11 +126,11 @@ func TestUnsupportedFilterPatternIsLogged(t *testing.T) {
 	assert.Contains(t, logs.String(), "device=0x05")
 }
 
-// TestNewAttrFilterReportsEveryUnsupportedPattern covers NewAttrFilter's
+// TestNewPropFilterReportsEveryUnsupportedPattern covers NewPropFilter's
 // error: it names each pattern Go's regexp can't compile, not only the first,
 // and the filter keeps the patterns that compiled.
-func TestNewAttrFilterReportsEveryUnsupportedPattern(t *testing.T) {
-	filter, err := z2m.NewAttrFilter([]string{"(?!a)", "battery", "(?<=b)"})
+func TestNewPropFilterReportsEveryUnsupportedPattern(t *testing.T) {
+	filter, err := z2m.NewPropFilter([]string{"(?!a)", "battery", "(?<=b)"})
 
 	require.Error(t, err)
 	var syntaxErr *syntax.Error

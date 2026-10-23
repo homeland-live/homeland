@@ -136,7 +136,7 @@ func (svc *Service) work(runs <-chan run) {
 				return
 			default:
 			}
-			if err := r.handler.Handle(r.dev.State.Attributes()); err != nil {
+			if err := r.handler.Handle(r.dev.State.Props()); err != nil {
 				slog.Error("svc/event: script error", "device", r.dev.Spec.FriendlyName, "err", err)
 			}
 		}

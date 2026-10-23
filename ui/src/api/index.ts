@@ -169,9 +169,9 @@ export interface Z2MDeviceSpec {
 }
 
 // Z2MStateSchema partitions a device's published state properties by expose
-// category. `primaryProps` are the regular-usage attributes (switch, light,
+// category. `primaryProps` are the regular-usage properties (switch, light,
 // sensor readings, button `action`); `secondaryProps` are the config and
-// diagnostic attributes (operation_mode, power_on_behavior, battery,
+// diagnostic properties (operation_mode, power_on_behavior, battery,
 // linkquality, last_seen, ...). Each bucket maps a property name to its expose
 // type (binary, numeric, enum, composite, list, ...); the injected last_seen
 // prop carries an empty type. Derived from the device definition, so it is
@@ -194,7 +194,7 @@ export interface Handler {
 }
 
 // Z2MDevice pairs a device's static metadata (spec) with its latest reported
-// state. `state` is a free-form attribute map (null until state is seen).
+// state. `state` is a free-form property map (null until state is seen).
 export interface Z2MDevice {
   spec: Z2MDeviceSpec;
   schema: Z2MStateSchema;
@@ -317,12 +317,12 @@ export interface Event {
 }
 
 // DeviceState is a device's latest reported state: a unique id, the time it
-// was recorded, and the free-form attribute map (`attrs`). `id`/`createdAt`
+// was recorded, and the free-form property map (`props`). `id`/`createdAt`
 // let the UI show when the current state was captured.
 export interface DeviceState {
   id: string;
   createdAt: string;
-  attrs: Record<string, unknown> | null;
+  props: Record<string, unknown> | null;
 }
 
 // DeviceEventsResponse carries a page of a device's stored events plus the

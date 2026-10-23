@@ -187,7 +187,7 @@ func TestDeviceStateIsDuplicate(t *testing.T) {
 }
 
 // TestNewDeviceState verifies NewDeviceState stamps each state with a fresh
-// unique ID and a UTC CreatedAt, and keeps the raw attributes it is given.
+// unique ID and a UTC CreatedAt, and keeps the raw props it is given.
 func TestNewDeviceState(t *testing.T) {
 	raw := map[string]json.RawMessage{"state": json.RawMessage(`"ON"`)}
 	before := time.Now().UTC()
@@ -214,7 +214,7 @@ func TestNewDeviceState(t *testing.T) {
 }
 
 // TestDeviceStateLogValue verifies a state logs as a group of its decoded
-// attributes, sorted by name, and that a nil state logs as nothing.
+// props, sorted by name, and that a nil state logs as nothing.
 func TestDeviceStateLogValue(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{

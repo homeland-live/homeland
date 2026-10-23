@@ -54,16 +54,16 @@ func (f *fakeZ2M) PublishProp(name, prop string, value any) error {
 }
 
 // DeviceState serves canned states keyed by friendly name or address, backing
-// ctx.z2m.getState tests. Each canned attribute map is wrapped into a
-// *z2m.DeviceState whose Attributes() reproduces it, matching the real client's
+// ctx.z2m.getState tests. Each canned prop map is wrapped into a
+// *z2m.DeviceState whose Props() reproduces it, matching the real client's
 // return type.
 func (f *fakeZ2M) DeviceState(id string) *z2m.DeviceState {
-	attrs, ok := f.states[id]
+	props, ok := f.states[id]
 	if !ok {
 		return nil
 	}
-	raw := make(map[string]json.RawMessage, len(attrs))
-	for k, v := range attrs {
+	raw := make(map[string]json.RawMessage, len(props))
+	for k, v := range props {
 		b, err := json.Marshal(v)
 		if err != nil {
 			panic(err)
