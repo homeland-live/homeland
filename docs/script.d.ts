@@ -148,14 +148,18 @@ interface MQTT {
 }
 
 /**
- * A device's full latest state (not just the changed attributes): the first
+ * A device's full latest state (not just the changed properties): the first
  * argument to `handle`, and what `ctx.z2m.getState` returns.
  *
- * A plain object keyed by attribute name, decoded from the state Zigbee2MQTT
- * reported, without its `device` and `update` attributes. The exact
- * attributes depend on the device; values are strings, numbers, booleans, or
- * nested objects/arrays. Common attributes are surfaced below for
- * convenience, but any attribute may be accessed via the index signature.
+ * A plain object keyed by property name, decoded from the state Zigbee2MQTT
+ * reported, without its `device` and `update` properties. The exact
+ * properties depend on the device; values are strings, numbers, booleans, or
+ * nested objects/arrays. Common properties are surfaced below for
+ * convenience, but any property may be accessed via the index signature.
+ *
+ * Zigbee2MQTT's `filtered_attributes` option calls these properties
+ * attributes. They are not ZCL attributes, which `/set` reads and writes
+ * with a `read`/`write` payload.
  */
 interface DeviceState {
   /** Button/switch action reported by the device (e.g. "on", "off", "toggle", "brightness_step_up"). */
@@ -167,8 +171,8 @@ interface DeviceState {
   /** Zigbee link quality (LQI), if reported. */
   linkquality?: number;
 
-  /** Any other device-specific attribute. */
-  [attribute: string]: unknown;
+  /** Any other device-specific property. */
+  [property: string]: unknown;
 }
 
 /**
@@ -215,13 +219,13 @@ interface HandlerContext {
  *   - a state equal to the previous one apart from `last_seen`,
  *     `linkquality` and `action` (one that carries `action` always counts,
  *     so repeated button presses do);
- *   - a state missing one of the device's primary attributes (e.g. `state`
+ *   - a state missing one of the device's primary properties (e.g. `state`
  *     for a light), which is incomplete. `action` counts only for a device
- *     whose sole primary attribute it is, such as a remote: then only
- *     presses reach `handle`. Attributes the device's Zigbee2MQTT
+ *     whose sole primary property it is, such as a remote: then only
+ *     presses reach `handle`. Properties the device's Zigbee2MQTT
  *     `filtered_attributes` option removes are never required, except
  *     for patterns Go's regexp doesn't support (such as a lookahead):
- *     those are skipped with a warning in the log, so the attribute
+ *     those are skipped with a warning in the log, so the property
  *     stays required and its states never reach `handle`;
  *   - a press replayed by the broker after a reconnect: the state it
  *     arrived with still counts if it changed, without `action`.

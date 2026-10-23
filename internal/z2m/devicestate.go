@@ -13,7 +13,7 @@ import (
 )
 
 // DeviceState is a device's state, parsed from its "<friendly_name>" topic.
-// Attributes vary per device, so the raw JSON is kept. All methods are safe on
+// Props vary per device, so the raw JSON is kept. All methods are safe on
 // a nil receiver.
 type DeviceState struct {
 	// ID and CreatedAt (UTC) are set by NewDeviceState when the state is
@@ -34,7 +34,7 @@ func (state *DeviceState) Has(prop string) bool {
 	return has
 }
 
-// Keys returns the names of every attribute present in the state, sorted
+// Keys returns the names of every prop present in the state, sorted
 // alphabetically.
 func (state *DeviceState) Keys() []string {
 	if state == nil || state.Raw == nil {
@@ -48,8 +48,8 @@ func (state *DeviceState) Keys() []string {
 	return keys
 }
 
-// Value returns the decoded Go value for an attribute (string, float64, bool,
-// or nested map/slice for object/array attributes), and whether it exists.
+// Value returns the decoded Go value for a prop (string, float64, bool, or
+// nested map/slice for object/array props), and whether it exists.
 func (state *DeviceState) Value(name string) (any, bool) {
 	if state == nil || state.Raw == nil {
 		return nil, false
@@ -65,8 +65,8 @@ func (state *DeviceState) Value(name string) (any, bool) {
 	return v, true
 }
 
-// Attributes returns every attribute decoded into Go values, keyed by name.
-func (state *DeviceState) Attributes() map[string]any {
+// Props returns every prop decoded into Go values, keyed by name.
+func (state *DeviceState) Props() map[string]any {
 	if state == nil || state.Raw == nil {
 		return nil
 	}
@@ -80,7 +80,7 @@ func (state *DeviceState) Attributes() map[string]any {
 }
 
 // LogValue implements slog.LogValuer: a state logs as a group of its decoded
-// attributes, sorted by name. slog resolves it only when a record is emitted,
+// props, sorted by name. slog resolves it only when a record is emitted,
 // so logging a state at a disabled level decodes nothing. A nil or empty state
 // is an empty group, which handlers omit.
 func (state *DeviceState) LogValue() slog.Value {
@@ -94,7 +94,7 @@ func (state *DeviceState) LogValue() slog.Value {
 }
 
 // IsDuplicate reports whether state repeats the previous state other: the same
-// attributes with byte-identical values, ignoring last_seen, linkquality and
+// props with byte-identical values, ignoring last_seen, linkquality and
 // action. z2m republishes a device's full cached state on every keep-alive,
 // which produces such repeats. A state that carries action is never a
 // duplicate, so a repeated button press still counts. It is false when either
@@ -106,7 +106,7 @@ func (state *DeviceState) IsDuplicate(other *DeviceState) bool {
 	return state.isSubsetOf(other) && other.isSubsetOf(state)
 }
 
-// isSubsetOf reports whether every attribute of state that IsDuplicate
+// isSubsetOf reports whether every prop of state that IsDuplicate
 // compares is in other with the same bytes. It is false when either state is
 // nil.
 func (state *DeviceState) isSubsetOf(other *DeviceState) bool {

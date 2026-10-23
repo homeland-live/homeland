@@ -30,7 +30,7 @@ func (api *API) ListZ2MBridgeDevicesHandlerV1(c fiber.Ctx) error {
 		resp = append(resp, fiber.Map{
 			"spec":    dev.Spec,
 			"schema":  dev.Schema,
-			"state":   dev.State.Attributes(),
+			"state":   dev.State.Props(),
 			"handler": api.ctx.Scripts.Handler(dev.Spec),
 		})
 	}
@@ -86,7 +86,7 @@ func (api *API) ListDeviceEventsHandlerV1(c fiber.Ctx) error {
 		state = fiber.Map{
 			"id":        dev.State.ID,
 			"createdAt": dev.State.CreatedAt,
-			"attrs":     dev.State.Attributes(),
+			"props":     dev.State.Props(),
 		}
 	}
 

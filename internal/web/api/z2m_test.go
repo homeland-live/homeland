@@ -95,13 +95,13 @@ func TestListDeviceEventsDeviceWithState(t *testing.T) {
 	var body struct {
 		State *struct {
 			ID    string         `json:"id"`
-			Attrs map[string]any `json:"attrs"`
+			Props map[string]any `json:"props"`
 		} `json:"state"`
 	}
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
 	require.NotNil(t, body.State)
 	assert.NotEmpty(t, body.State.ID)
-	assert.Equal(t, map[string]any{"state": "ON"}, body.State.Attrs)
+	assert.Equal(t, map[string]any{"state": "ON"}, body.State.Props)
 }
 
 func TestListDeviceEventsByFriendlyNameOrAddress(t *testing.T) {

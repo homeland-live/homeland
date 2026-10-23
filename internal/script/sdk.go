@@ -42,7 +42,7 @@ func (s *z2mSDK) GetState(devID string) (any, error) {
 	if state == nil {
 		return nil, nil
 	}
-	return state.Attributes(), nil
+	return state.Props(), nil
 }
 
 // mqttSDK backs ctx.mqtt. With a nil client (no external broker configured)

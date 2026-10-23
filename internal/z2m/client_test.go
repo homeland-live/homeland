@@ -42,9 +42,9 @@ func TestFirstStateSkipsNotify(t *testing.T) {
 	c.Handle("bulb", []byte(`{"state":"OFF","linkquality":99}`))
 	assert.Equal(t, 1, calls, "subscriber calls after a state that only adds linkquality")
 
-	// A new attribute makes it a change, so it is fanned out.
+	// A new prop makes it a change, so it is fanned out.
 	c.Handle("bulb", []byte(`{"state":"OFF","linkquality":99,"power_on_behavior":"on"}`))
-	assert.Equal(t, 2, calls, "subscriber calls after a state with a new attribute")
+	assert.Equal(t, 2, calls, "subscriber calls after a state with a new prop")
 }
 
 // TestDevicesSortedByFriendlyName verifies Devices is deterministic: sorted by

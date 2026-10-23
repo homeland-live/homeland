@@ -8,7 +8,7 @@ type BridgeState struct {
 }
 
 // BridgeInfo represents the payload of the `zigbee2mqtt/bridge/info` topic. It
-// is republished whenever one of its attributes changes. Only the fields we
+// is republished whenever one of its fields changes. Only the fields we
 // care about are modelled; z2m publishes more (config_schema, most of
 // config, ...).
 type BridgeInfo struct {

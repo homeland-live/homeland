@@ -32,9 +32,9 @@ func openTemp(t *testing.T) *db.Repo {
 // event builds an Event for the given device from a JSON object literal.
 func event(t *testing.T, ieeeAddress, payload string) *db.Event {
 	t.Helper()
-	var attrs map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal([]byte(payload), &attrs), "invalid test payload")
-	return &db.Event{IEEEAddress: ieeeAddress, Payload: attrs}
+	var props map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal([]byte(payload), &props), "invalid test payload")
+	return &db.Event{IEEEAddress: ieeeAddress, Payload: props}
 }
 
 // eventAt is like event but stamps the Event with an explicit created_at, used

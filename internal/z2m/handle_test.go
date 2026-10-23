@@ -40,7 +40,7 @@ func TestStateBeforeRosterIsKept(t *testing.T) {
 
 	state := c.DeviceState("door")
 	require.NotNil(t, state, "the pre-roster state must move to the device")
-	assert.Equal(t, map[string]any{"contact": true}, state.Attributes())
+	assert.Equal(t, map[string]any{"contact": true}, state.Props())
 	assert.Equal(t, state, c.DeviceState("0x01"), "the state is keyed by IEEE address")
 	assert.Zero(t, *calls, "the initial state is not an event")
 
@@ -57,7 +57,7 @@ func TestStateBeforeRosterKeepsLatest(t *testing.T) {
 	c.Handle("door", []byte(`{"contact":false}`))
 	c.Handle("bridge/devices", contactRoster)
 
-	assert.Equal(t, map[string]any{"contact": false}, c.DeviceState("door").Attributes())
+	assert.Equal(t, map[string]any{"contact": false}, c.DeviceState("door").Props())
 }
 
 // TestRosterKeepsNewerStateByAddress covers a device that reported under both
@@ -70,7 +70,7 @@ func TestRosterKeepsNewerStateByAddress(t *testing.T) {
 	c.Handle("0x01", []byte(`{"contact":false}`))
 	c.Handle("bridge/devices", contactRoster)
 
-	assert.Equal(t, map[string]any{"contact": false}, c.DeviceState("door").Attributes())
+	assert.Equal(t, map[string]any{"contact": false}, c.DeviceState("door").Props())
 }
 
 // TestRosterDropsStateOfRemovedDevice covers a device that leaves the roster:
@@ -97,7 +97,7 @@ func TestDeviceWithoutDefinitionPropagates(t *testing.T) {
 	c.Handle("diy", []byte(`{"state":"OFF"}`))
 
 	assert.Equal(t, 1, *calls)
-	assert.Equal(t, map[string]any{"state": "OFF"}, c.DeviceState("diy").Attributes())
+	assert.Equal(t, map[string]any{"state": "OFF"}, c.DeviceState("diy").Props())
 }
 
 // TestHandleIgnoresNonStateTopics covers what the "#" subscription delivers
@@ -124,13 +124,13 @@ func TestHandleIgnoresNonStateTopics(t *testing.T) {
 
 	assert.Zero(t, *calls)
 	for _, id := range []string{"lamp", "room/lamp"} {
-		assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState(id).Attributes(), id)
+		assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState(id).Props(), id)
 	}
 	assert.Len(t, c.Devices(), 2, "no topic may add a device")
 }
 
 // TestHandleStripsDeviceAndUpdateKeys covers the device info and OTA update
-// objects z2m may embed in state: they are not device attributes.
+// objects z2m may embed in state: they are not device props.
 func TestHandleStripsDeviceAndUpdateKeys(t *testing.T) {
 	c, _ := newCountingClient(t)
 	var got *z2m.Device
@@ -141,7 +141,7 @@ func TestHandleStripsDeviceAndUpdateKeys(t *testing.T) {
 	c.Handle("lamp", []byte(`{"state":"OFF","device":{"friendlyName":"lamp"},"update":{"state":"idle"}}`))
 
 	require.NotNil(t, got)
-	assert.Equal(t, map[string]any{"state": "OFF"}, got.State.Attributes())
+	assert.Equal(t, map[string]any{"state": "OFF"}, got.State.Props())
 }
 
 // TestHandleIgnoresMalformedState covers a payload that is not a JSON object:
@@ -156,7 +156,7 @@ func TestHandleIgnoresMalformedState(t *testing.T) {
 	}
 
 	assert.Zero(t, *calls)
-	assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState("lamp").Attributes())
+	assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState("lamp").Props())
 }
 
 // TestHandleIgnoresEmptyPayload covers z2m clearing a retained topic on a
@@ -172,7 +172,7 @@ func TestHandleIgnoresEmptyPayload(t *testing.T) {
 	c.Handle("lamp", []byte{})
 
 	assert.Zero(t, *calls)
-	assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState("lamp").Attributes())
+	assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState("lamp").Props())
 	assert.NotContains(t, logs.String(), "failed to parse device state")
 }
 
@@ -186,7 +186,7 @@ func TestHandleDropsStateMissingPrimaryProp(t *testing.T) {
 	c.Handle("door", []byte(`{"battery":90}`))
 
 	assert.Zero(t, *calls)
-	assert.Equal(t, map[string]any{"contact": true}, c.DeviceState("door").Attributes())
+	assert.Equal(t, map[string]any{"contact": true}, c.DeviceState("door").Props())
 }
 
 // TestHandleDropsDuplicateState covers z2m republishing an unchanged state
@@ -271,7 +271,7 @@ func TestRetainedReplayIsNotAPress(t *testing.T) {
 	// Reconnect after the relay was toggled (and pressed) during an outage.
 	c.HandleRetained("wall", []byte(`{"state_left":"OFF","action":"double_left"}`))
 	require.Len(t, got, 2, "a state change missed during an outage is an event")
-	assert.Equal(t, map[string]any{"state_left": "OFF"}, got[1].State.Attributes(), "without the stale press")
+	assert.Equal(t, map[string]any{"state_left": "OFF"}, got[1].State.Props(), "without the stale press")
 }
 
 // TestRetainedReplayOfRemoteIsDropped covers a remote: with the stale press
@@ -300,7 +300,7 @@ func TestRenamedDeviceKeepsState(t *testing.T) {
 	]}}]`))
 
 	assert.Nil(t, c.Device("door"), "the old name no longer resolves")
-	assert.Equal(t, map[string]any{"contact": true}, c.DeviceState("front-door").Attributes())
+	assert.Equal(t, map[string]any{"contact": true}, c.DeviceState("front-door").Props())
 
 	c.Handle("front-door", []byte(`{"contact":false}`))
 	assert.Equal(t, 1, *calls)

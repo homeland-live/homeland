@@ -222,7 +222,7 @@ function hideDataDialog() {
             </VTabs>
             <VTabsWindow v-model="detailTab" class="mt-3">
               <VTabsWindowItem value="state" class="tab-item-centered">
-                <DataList v-if="state?.attrs" :data="state.attrs" />
+                <DataList v-if="state?.props" :data="state.props" />
                 <VAlert
                   v-else
                   type="warning"

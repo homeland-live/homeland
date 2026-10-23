@@ -11,20 +11,20 @@ import (
 // device_options) that shape a device's published state.
 type DeviceOptions struct {
 	// FilteredAttributes lists patterns of props z2m drops from every
-	// publish (see NewAttrFilter). Nil means the option is unset.
+	// publish (see NewPropFilter). Nil means the option is unset.
 	FilteredAttributes []string `json:"filtered_attributes"`
 }
 
-// AttrFilter matches the props z2m's filtered_attributes drop from every
+// PropFilter matches the props z2m's filtered_attributes drop from every
 // publish. A nil filter matches nothing.
-type AttrFilter []*regexp.Regexp
+type PropFilter []*regexp.Regexp
 
-// NewAttrFilter compiles patterns the way z2m tests them, as "^<pattern>$".
+// NewPropFilter compiles patterns the way z2m tests them, as "^<pattern>$".
 // A pattern Go's regexp can't compile (a JS-only construct such as a
 // lookahead) is skipped, so it matches nothing; the error then names every
 // skipped pattern.
-func NewAttrFilter(patterns []string) (AttrFilter, error) {
-	var filter AttrFilter
+func NewPropFilter(patterns []string) (PropFilter, error) {
+	var filter PropFilter
 	var errs []error
 	for _, p := range patterns {
 		re, err := regexp.Compile("^" + p + "$")
@@ -41,7 +41,7 @@ func NewAttrFilter(patterns []string) (AttrFilter, error) {
 }
 
 // Match reports whether z2m drops prop from every publish.
-func (f AttrFilter) Match(prop string) bool {
+func (f PropFilter) Match(prop string) bool {
 	return slices.ContainsFunc(f, func(re *regexp.Regexp) bool {
 		return re.MatchString(prop)
 	})

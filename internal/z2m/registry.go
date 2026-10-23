@@ -20,8 +20,8 @@ type registry struct {
 	states  map[string]*DeviceState
 	// filters holds the devices bridge/info lists with filtered_attributes of
 	// their own; every other device gets defaultFilter (device_options).
-	filters       map[string]AttrFilter
-	defaultFilter AttrFilter
+	filters       map[string]PropFilter
+	defaultFilter PropFilter
 
 	bridgeOnline bool
 }
@@ -32,13 +32,13 @@ func newRegistry() *registry {
 		devices:   make(map[string]*DeviceSpec),
 		schemas:   make(map[string]*StateSchema),
 		states:    make(map[string]*DeviceState),
-		filters:   make(map[string]AttrFilter),
+		filters:   make(map[string]PropFilter),
 	}
 }
 
-// attrFilter returns the filter of the device with IEEE address addr, nil
+// propFilter returns the filter of the device with IEEE address addr, nil
 // before bridge/info arrives. The caller holds mu.
-func (r *registry) attrFilter(addr string) AttrFilter {
+func (r *registry) propFilter(addr string) PropFilter {
 	if filter, ok := r.filters[addr]; ok {
 		return filter
 	}
@@ -73,7 +73,7 @@ func (r *registry) replaceDevices(devices []DeviceSpec) {
 		}
 		newAddresses[d.FriendlyName] = d.IEEEAddress
 		newDevices[d.IEEEAddress] = &d
-		newSchemas[d.IEEEAddress] = NewStateSchema(d.Definition, r.attrFilter(d.IEEEAddress))
+		newSchemas[d.IEEEAddress] = NewStateSchema(d.Definition, r.propFilter(d.IEEEAddress))
 	}
 
 	r.addresses = newAddresses
@@ -145,16 +145,16 @@ func (r *registry) setState(devID string, nextState *DeviceState) (propagate boo
 // device's own options shallowly, so a device's own list, even an empty one,
 // replaces the default. Unsupported patterns are logged and skipped.
 func (r *registry) setOptions(cfg BridgeConfig) {
-	defaultFilter, err := NewAttrFilter(cfg.DeviceOptions.FilteredAttributes)
+	defaultFilter, err := NewPropFilter(cfg.DeviceOptions.FilteredAttributes)
 	if err != nil {
 		slog.Warn("z2m: ignore unsupported device_options filter", "err", err)
 	}
-	filters := make(map[string]AttrFilter, len(cfg.Devices))
+	filters := make(map[string]PropFilter, len(cfg.Devices))
 	for addr, opts := range cfg.Devices {
 		if opts.FilteredAttributes == nil {
 			continue
 		}
-		filter, err := NewAttrFilter(opts.FilteredAttributes)
+		filter, err := NewPropFilter(opts.FilteredAttributes)
 		if err != nil {
 			slog.Warn("z2m: ignore unsupported device filter", "device", addr, "err", err)
 		}
@@ -167,7 +167,7 @@ func (r *registry) setOptions(cfg BridgeConfig) {
 	r.defaultFilter = defaultFilter
 	r.filters = filters
 	for addr, d := range r.devices {
-		r.schemas[addr] = NewStateSchema(d.Definition, r.attrFilter(addr))
+		r.schemas[addr] = NewStateSchema(d.Definition, r.propFilter(addr))
 	}
 }
 

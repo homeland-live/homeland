@@ -26,7 +26,7 @@ type StateSchema struct {
 // features are nested under it in state (level_config: {...}), not keys of
 // their own. A prop filter matches is never published, so it is skipped.
 // schema must come from NewStateSchema: addProp writes to its maps.
-func (schema *StateSchema) addProp(e Expose, filter AttrFilter) {
+func (schema *StateSchema) addProp(e Expose, filter PropFilter) {
 	if e.Property == "" || e.Access&accessPublished == 0 || schema.hasProp(e.Property) || filter.Match(e.Property) {
 		return
 	}
@@ -51,7 +51,7 @@ func (schema *StateSchema) hasProp(prop string) bool {
 // "action" is always primary. Props z2m adds outside the exposes, such as
 // last_seen, are not included, and neither are the props filter matches,
 // which z2m keeps out of every publish. A nil definition yields nil.
-func NewStateSchema(devdef *DeviceDefinition, filter AttrFilter) *StateSchema {
+func NewStateSchema(devdef *DeviceDefinition, filter PropFilter) *StateSchema {
 	if devdef == nil {
 		return nil
 	}
