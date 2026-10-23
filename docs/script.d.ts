@@ -218,7 +218,11 @@ interface HandlerContext {
  *   - a state missing one of the device's primary attributes (e.g. `state`
  *     for a light), which is incomplete. `action` counts only for a device
  *     whose sole primary attribute it is, such as a remote: then only
- *     presses reach `handle`;
+ *     presses reach `handle`. Attributes the device's Zigbee2MQTT
+ *     `filtered_attributes` option removes are never required, except
+ *     for patterns Go's regexp doesn't support (such as a lookahead):
+ *     those are skipped with a warning in the log, so the attribute
+ *     stays required and its states never reach `handle`;
  *   - a press replayed by the broker after a reconnect: the state it
  *     arrived with still counts if it changed, without `action`.
  *

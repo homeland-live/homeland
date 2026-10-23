@@ -24,9 +24,10 @@ type StateSchema struct {
 // addProp records e as a top-level key once, under the first expose
 // declaring it, when it has a property and is published (access bit 1). Its
 // features are nested under it in state (level_config: {...}), not keys of
-// their own. schema must come from NewStateSchema: addProp writes to its maps.
-func (schema *StateSchema) addProp(e Expose) {
-	if e.Property == "" || e.Access&accessPublished == 0 || schema.hasProp(e.Property) {
+// their own. A prop filter matches is never published, so it is skipped.
+// schema must come from NewStateSchema: addProp writes to its maps.
+func (schema *StateSchema) addProp(e Expose, filter AttrFilter) {
+	if e.Property == "" || e.Access&accessPublished == 0 || schema.hasProp(e.Property) || filter.Match(e.Property) {
 		return
 	}
 	if e.Category == "" || e.Property == propAction {
@@ -48,8 +49,9 @@ func (schema *StateSchema) hasProp(prop string) bool {
 // features of grouping exposes (light, switch, ...), which z2m publishes at
 // top level. It looks one grouping level deep, which is all z2m produces.
 // "action" is always primary. Props z2m adds outside the exposes, such as
-// last_seen, are not included. A nil definition yields nil.
-func NewStateSchema(devdef *DeviceDefinition) *StateSchema {
+// last_seen, are not included, and neither are the props filter matches,
+// which z2m keeps out of every publish. A nil definition yields nil.
+func NewStateSchema(devdef *DeviceDefinition, filter AttrFilter) *StateSchema {
 	if devdef == nil {
 		return nil
 	}
@@ -59,13 +61,13 @@ func NewStateSchema(devdef *DeviceDefinition) *StateSchema {
 	}
 	for _, e := range devdef.Exposes {
 		if e.Property != "" {
-			schema.addProp(e)
+			schema.addProp(e, filter)
 			continue
 		}
 		// A grouping expose has no key of its own; its features are
 		// published at top level.
 		for _, f := range e.Features {
-			schema.addProp(f)
+			schema.addProp(f, filter)
 		}
 	}
 	return schema

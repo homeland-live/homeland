@@ -14,10 +14,14 @@ type registry struct {
 
 	// addresses maps friendly name to IEEE address.
 	addresses map[string]string
-	// devices, schemas and states are keyed by IEEE address.
+	// devices, schemas, states and filters are keyed by IEEE address.
 	devices map[string]*DeviceSpec
 	schemas map[string]*StateSchema
 	states  map[string]*DeviceState
+	// filters holds the devices bridge/info lists with filtered_attributes of
+	// their own; every other device gets defaultFilter (device_options).
+	filters       map[string]AttrFilter
+	defaultFilter AttrFilter
 
 	bridgeOnline bool
 }
@@ -28,7 +32,17 @@ func newRegistry() *registry {
 		devices:   make(map[string]*DeviceSpec),
 		schemas:   make(map[string]*StateSchema),
 		states:    make(map[string]*DeviceState),
+		filters:   make(map[string]AttrFilter),
 	}
+}
+
+// attrFilter returns the filter of the device with IEEE address addr, nil
+// before bridge/info arrives. The caller holds mu.
+func (r *registry) attrFilter(addr string) AttrFilter {
+	if filter, ok := r.filters[addr]; ok {
+		return filter
+	}
+	return r.defaultFilter
 }
 
 // addr maps a friendly name to its IEEE address; any other id is returned
@@ -45,8 +59,11 @@ func (r *registry) addr(id string) string {
 // stored under a friendly name, because it arrived before the roster could
 // resolve it, moves to the device's IEEE address; when the address already
 // has a state, the newer of the two is kept. Entries without an IEEE address
-// or friendly name are skipped.
+// or friendly name are skipped. Each schema applies the device's filter.
 func (r *registry) replaceDevices(devices []DeviceSpec) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	newAddresses := make(map[string]string, len(devices))
 	newDevices := make(map[string]*DeviceSpec, len(devices))
 	newSchemas := make(map[string]*StateSchema, len(devices))
@@ -56,11 +73,8 @@ func (r *registry) replaceDevices(devices []DeviceSpec) {
 		}
 		newAddresses[d.FriendlyName] = d.IEEEAddress
 		newDevices[d.IEEEAddress] = &d
-		newSchemas[d.IEEEAddress] = NewStateSchema(d.Definition)
+		newSchemas[d.IEEEAddress] = NewStateSchema(d.Definition, r.attrFilter(d.IEEEAddress))
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
 
 	r.addresses = newAddresses
 	r.devices = newDevices
@@ -123,6 +137,38 @@ func (r *registry) setState(devID string, nextState *DeviceState) (propagate boo
 
 	r.states[addr] = nextState
 	return true
+}
+
+// setOptions swaps in the filters from the latest bridge/info's config and
+// rebuilds every known device's schema (replacing it, since snapshots share
+// it), so a removed filter takes effect too. z2m merges device_options into a
+// device's own options shallowly, so a device's own list, even an empty one,
+// replaces the default. Unsupported patterns are logged and skipped.
+func (r *registry) setOptions(cfg BridgeConfig) {
+	defaultFilter, err := NewAttrFilter(cfg.DeviceOptions.FilteredAttributes)
+	if err != nil {
+		slog.Warn("z2m: ignore unsupported device_options filter", "err", err)
+	}
+	filters := make(map[string]AttrFilter, len(cfg.Devices))
+	for addr, opts := range cfg.Devices {
+		if opts.FilteredAttributes == nil {
+			continue
+		}
+		filter, err := NewAttrFilter(opts.FilteredAttributes)
+		if err != nil {
+			slog.Warn("z2m: ignore unsupported device filter", "device", addr, "err", err)
+		}
+		filters[addr] = filter
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.defaultFilter = defaultFilter
+	r.filters = filters
+	for addr, d := range r.devices {
+		r.schemas[addr] = NewStateSchema(d.Definition, r.attrFilter(addr))
+	}
 }
 
 func (r *registry) setBridgeOnline(online bool) {

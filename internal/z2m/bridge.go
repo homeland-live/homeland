@@ -9,7 +9,8 @@ type BridgeState struct {
 
 // BridgeInfo represents the payload of the `zigbee2mqtt/bridge/info` topic. It
 // is republished whenever one of its attributes changes. Only the fields we
-// care about are modelled; z2m publishes more (config, config_schema, ...).
+// care about are modelled; z2m publishes more (config_schema, most of
+// config, ...).
 type BridgeInfo struct {
 	Version               string            `json:"version"`
 	Commit                string            `json:"commit"`
@@ -23,6 +24,14 @@ type BridgeInfo struct {
 	ZigbeeHerdsmanConvert BridgeVersion     `json:"zigbee_herdsman_converters"`
 	OS                    BridgeInfoOS      `json:"os"`
 	MQTT                  BridgeInfoMQTT    `json:"mqtt"`
+	Config                BridgeConfig      `json:"config"`
+}
+
+// BridgeConfig is the part of bridge/info's "config" (z2m's settings) that
+// Homeland reads.
+type BridgeConfig struct {
+	DeviceOptions DeviceOptions            `json:"device_options"`
+	Devices       map[string]DeviceOptions `json:"devices"` // keyed by IEEE address
 }
 
 // BridgeVersion is a simple {"version": ...} sub-object used by bridge/info.

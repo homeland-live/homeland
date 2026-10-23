@@ -202,6 +202,8 @@ func (c *Client) handleBridgeState(payload []byte) {
 	slog.Info("z2m: bridge state", "state", bs.State)
 }
 
+// handleBridgeInfo records the bridge info and hands its config to the
+// registry, which rebuilds every schema with the filters it sets.
 func (c *Client) handleBridgeInfo(payload []byte) {
 	var info BridgeInfo
 	if err := json.Unmarshal(payload, &info); err != nil {
@@ -211,6 +213,7 @@ func (c *Client) handleBridgeInfo(payload []byte) {
 	c.mu.Lock()
 	c.info = &info
 	c.mu.Unlock()
+	c.registry.setOptions(info.Config)
 	slog.Info("z2m: bridge info",
 		"version", info.Version,
 		"coordinator", info.Coordinator.Type,
