@@ -235,6 +235,19 @@ export interface Z2MBridgeInfoMQTT {
   version: number;
 }
 
+// Z2MDeviceOptions is the part of a z2m device's options Homeland reads.
+// filtered_attributes is null when unset.
+export interface Z2MDeviceOptions {
+  filtered_attributes: string[] | null;
+}
+
+// Z2MBridgeConfig is the part of z2m's settings Homeland reads. devices is
+// keyed by IEEE address and null when bridge/info carries no config.
+export interface Z2MBridgeConfig {
+  device_options: Z2MDeviceOptions;
+  devices: Record<string, Z2MDeviceOptions> | null;
+}
+
 export interface Z2MBridgeInfo {
   version: string;
   commit: string;
@@ -248,6 +261,7 @@ export interface Z2MBridgeInfo {
   zigbee_herdsman_converters: Z2MBridgeVersion;
   os: Z2MBridgeInfoOS;
   mqtt: Z2MBridgeInfoMQTT;
+  config: Z2MBridgeConfig;
 }
 
 export interface Z2MBridgeHealthOS {

@@ -27,6 +27,14 @@ func buildSchema(t *testing.T, exposesJSON string) *z2m.StateSchema {
 	return d.Schema
 }
 
+// attrFilter returns the filter of patterns, all of which must compile.
+func attrFilter(t *testing.T, patterns ...string) z2m.AttrFilter {
+	t.Helper()
+	filter, err := z2m.NewAttrFilter(patterns)
+	require.NoError(t, err)
+	return filter
+}
+
 // TestStateSchemaPartitionsByCategory verifies published properties with no
 // expose category go to PrimaryProps and those with any non-empty category go
 // to SecondaryProps.
@@ -188,7 +196,7 @@ func TestNewStateSchema(t *testing.T) {
 				"voltage":            "numeric",
 			},
 		},
-		z2m.NewStateSchema(lookupFixtureDevice(t, "motion-sensor").Definition),
+		z2m.NewStateSchema(lookupFixtureDevice(t, "motion-sensor").Definition, nil),
 	)
 	assert.Equal(t,
 		&z2m.StateSchema{
@@ -202,6 +210,146 @@ func TestNewStateSchema(t *testing.T) {
 				"power_on_behavior": "enum",
 			},
 		},
-		z2m.NewStateSchema(lookupFixtureDevice(t, "mirror-light").Definition),
+		z2m.NewStateSchema(lookupFixtureDevice(t, "mirror-light").Definition, nil),
 	)
+}
+
+// TestNewStateSchemaWithoutFilter verifies filters that match nothing (from
+// an unset or an empty list) yield the unfiltered schema.
+func TestNewStateSchemaWithoutFilter(t *testing.T) {
+	def := lookupFixtureDevice(t, "motion-sensor").Definition
+	want := z2m.NewStateSchema(def, nil)
+
+	for name, patterns := range map[string][]string{
+		"unset": nil,
+		"empty": {},
+	} {
+		assert.Equal(t, want, z2m.NewStateSchema(def, attrFilter(t, patterns...)), name)
+	}
+}
+
+// TestNewStateSchemaFilteredAttributes verifies the props z2m's
+// filtered_attributes keep out of every publish are left out of the schema,
+// in either bucket. Each pattern is a regular expression tested as
+// "^<pattern>$", like z2m does. The motion sensor's unfiltered schema is in
+// TestNewStateSchema.
+func TestNewStateSchemaFilteredAttributes(t *testing.T) {
+	def := lookupFixtureDevice(t, "motion-sensor").Definition
+	allSecondary := map[string]string{
+		"battery":            "numeric",
+		"device_temperature": "numeric",
+		"linkquality":        "numeric",
+		"power_outage_count": "numeric",
+		"voltage":            "numeric",
+	}
+
+	tests := []struct {
+		name          string
+		patterns      []string
+		wantPrimary   map[string]string
+		wantSecondary map[string]string
+	}{
+		{
+			name:          "primary prop",
+			patterns:      []string{"illuminance"},
+			wantPrimary:   map[string]string{"occupancy": "binary"},
+			wantSecondary: allSecondary,
+		},
+		{
+			name:        "secondary props",
+			patterns:    []string{"battery", "voltage"},
+			wantPrimary: map[string]string{"illuminance": "numeric", "occupancy": "binary"},
+			wantSecondary: map[string]string{
+				"device_temperature": "numeric",
+				"linkquality":        "numeric",
+				"power_outage_count": "numeric",
+			},
+		},
+		{
+			name:          "every primary prop",
+			patterns:      []string{"illuminance", "occupancy"},
+			wantPrimary:   map[string]string{},
+			wantSecondary: allSecondary,
+		},
+		{
+			name:          "prefix does not match",
+			patterns:      []string{"illum", "occ", "lux"},
+			wantPrimary:   map[string]string{"illuminance": "numeric", "occupancy": "binary"},
+			wantSecondary: allSecondary,
+		},
+		{
+			name:        "regular expressions",
+			patterns:    []string{"illum.*", ".*_count", "(battery|voltage)"},
+			wantPrimary: map[string]string{"occupancy": "binary"},
+			wantSecondary: map[string]string{
+				"device_temperature": "numeric",
+				"linkquality":        "numeric",
+			},
+		},
+		{
+			// "^occ|voltage$" is "^occ" or "voltage$", as in JS.
+			name:        "top-level alternation anchors each side",
+			patterns:    []string{"occ|voltage"},
+			wantPrimary: map[string]string{"illuminance": "numeric"},
+			wantSecondary: map[string]string{
+				"battery":            "numeric",
+				"device_temperature": "numeric",
+				"linkquality":        "numeric",
+				"power_outage_count": "numeric",
+			},
+		},
+		{
+			name:          "unknown prop",
+			patterns:      []string{"temperature"},
+			wantPrimary:   map[string]string{"illuminance": "numeric", "occupancy": "binary"},
+			wantSecondary: allSecondary,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := z2m.NewStateSchema(def, attrFilter(t, tt.patterns...))
+
+			require.NotNil(t, schema)
+			assert.Equal(t, tt.wantPrimary, schema.PrimaryProps)
+			assert.Equal(t, tt.wantSecondary, schema.SecondaryProps)
+		})
+	}
+}
+
+// TestNewStateSchemaFiltersGroupingFeatures verifies a filter applies to the
+// features of a grouping expose (published at top level) and to a composite
+// expose as a whole, as z2m drops top-level keys only.
+func TestNewStateSchemaFiltersGroupingFeatures(t *testing.T) {
+	def := lookupFixtureDevice(t, "mirror-light").Definition
+
+	schema := z2m.NewStateSchema(def, attrFilter(t, "brightness", "level_config"))
+
+	require.NotNil(t, schema)
+	assert.Equal(t, map[string]string{"state": "binary"}, schema.PrimaryProps)
+	assert.Equal(t, map[string]string{
+		"linkquality":       "numeric",
+		"power_on_behavior": "enum",
+	}, schema.SecondaryProps)
+}
+
+// TestNewStateSchemaFiltersAction verifies a filtered action leaves the
+// schema like any other prop, so a remote whose presses are filtered has no
+// primary prop left to require.
+func TestNewStateSchemaFiltersAction(t *testing.T) {
+	def := &z2m.DeviceDefinition{Exposes: []z2m.Expose{
+		{Type: "enum", Name: "action", Property: "action", Access: 1, Category: "diagnostic"},
+		{Type: "numeric", Name: "battery", Property: "battery", Access: 1, Category: "diagnostic"},
+	}}
+
+	schema := z2m.NewStateSchema(def, attrFilter(t, "action"))
+
+	require.NotNil(t, schema)
+	assert.Empty(t, schema.PrimaryProps)
+	assert.Equal(t, map[string]string{"battery": "numeric"}, schema.SecondaryProps)
+}
+
+// TestNewStateSchemaNilDefinitionWithFilter verifies a filter doesn't turn a
+// missing definition into a schema.
+func TestNewStateSchemaNilDefinitionWithFilter(t *testing.T) {
+	assert.Nil(t, z2m.NewStateSchema(nil, attrFilter(t, "illuminance")))
 }
