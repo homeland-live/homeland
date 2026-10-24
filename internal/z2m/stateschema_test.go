@@ -27,12 +27,15 @@ func buildSchema(t *testing.T, exposesJSON string) *z2m.StateSchema {
 	return d.Schema
 }
 
-// propFilter returns the filter of patterns, all of which must compile.
-func propFilter(t *testing.T, patterns ...string) z2m.PropFilter {
+// deviceOptions returns the options of a device whose own
+// filtered_attributes are patterns, all of which must compile. Nil patterns
+// (no arguments) leave the list unset, so the options are nil; an empty,
+// non-nil slice is an empty list, so they aren't.
+func deviceOptions(t *testing.T, patterns ...string) *z2m.DeviceOptions {
 	t.Helper()
-	filter, err := z2m.NewPropFilter(patterns)
+	opts, err := z2m.CompileDeviceOptions(z2m.DeviceOptions{FilteredAttributes: patterns}, nil)
 	require.NoError(t, err)
-	return filter
+	return opts
 }
 
 // TestStateSchemaPartitionsByCategory verifies published properties with no
@@ -224,7 +227,7 @@ func TestNewStateSchemaWithoutFilter(t *testing.T) {
 		"unset": nil,
 		"empty": {},
 	} {
-		assert.Equal(t, want, z2m.NewStateSchema(def, propFilter(t, patterns...)), name)
+		assert.Equal(t, want, z2m.NewStateSchema(def, deviceOptions(t, patterns...)), name)
 	}
 }
 
@@ -307,7 +310,7 @@ func TestNewStateSchemaFilteredAttributes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := z2m.NewStateSchema(def, propFilter(t, tt.patterns...))
+			schema := z2m.NewStateSchema(def, deviceOptions(t, tt.patterns...))
 
 			require.NotNil(t, schema)
 			assert.Equal(t, tt.wantPrimary, schema.PrimaryProps)
@@ -322,7 +325,7 @@ func TestNewStateSchemaFilteredAttributes(t *testing.T) {
 func TestNewStateSchemaFiltersGroupingFeatures(t *testing.T) {
 	def := lookupFixtureDevice(t, "mirror-light").Definition
 
-	schema := z2m.NewStateSchema(def, propFilter(t, "brightness", "level_config"))
+	schema := z2m.NewStateSchema(def, deviceOptions(t, "brightness", "level_config"))
 
 	require.NotNil(t, schema)
 	assert.Equal(t, map[string]string{"state": "binary"}, schema.PrimaryProps)
@@ -341,7 +344,7 @@ func TestNewStateSchemaFiltersAction(t *testing.T) {
 		{Type: "numeric", Name: "battery", Property: "battery", Access: 1, Category: "diagnostic"},
 	}}
 
-	schema := z2m.NewStateSchema(def, propFilter(t, "action"))
+	schema := z2m.NewStateSchema(def, deviceOptions(t, "action"))
 
 	require.NotNil(t, schema)
 	assert.Empty(t, schema.PrimaryProps)
@@ -351,5 +354,5 @@ func TestNewStateSchemaFiltersAction(t *testing.T) {
 // TestNewStateSchemaNilDefinitionWithFilter verifies a filter doesn't turn a
 // missing definition into a schema.
 func TestNewStateSchemaNilDefinitionWithFilter(t *testing.T) {
-	assert.Nil(t, z2m.NewStateSchema(nil, propFilter(t, "illuminance")))
+	assert.Nil(t, z2m.NewStateSchema(nil, deviceOptions(t, "illuminance")))
 }

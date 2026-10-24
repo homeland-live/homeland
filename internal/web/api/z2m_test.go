@@ -214,3 +214,49 @@ func TestGetDeviceScriptReportsTwoScriptsConflict(t *testing.T) {
 	assert.False(t, body.Handler.HasHandle)
 	assert.Equal(t, "0x01.js", body.Script.FileName)
 }
+
+// TestDeviceRoutesReturnOptions covers the options both device routes return:
+// the options z2m applies to the device, null until bridge/info arrives and
+// while none are set.
+func TestDeviceRoutesReturnOptions(t *testing.T) {
+	app, client, _ := newApp(t)
+	client.Handle("bridge/devices", lampRoster)
+
+	options := func(t *testing.T) (list, events json.RawMessage) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/bridge/devices", nil))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		var listBody struct {
+			Devices []map[string]json.RawMessage `json:"devices"`
+		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&listBody))
+		require.Len(t, listBody.Devices, 1)
+
+		resp, err = app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/lamp/events", nil))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		var eventsBody map[string]json.RawMessage
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&eventsBody))
+		return listBody.Devices[0]["options"], eventsBody["options"]
+	}
+
+	list, events := options(t)
+	assert.JSONEq(t, `null`, string(list))
+	assert.JSONEq(t, `null`, string(events))
+
+	client.Handle("bridge/info", []byte(`{"version":"2.6.0","config":{"devices":{"0x01":{"friendly_name":"lamp"}}}}`))
+
+	list, events = options(t)
+	assert.JSONEq(t, `null`, string(list), "no options set")
+	assert.JSONEq(t, `null`, string(events), "no options set")
+
+	client.Handle("bridge/info", []byte(`{"version":"2.6.0","config":{
+		"device_options":{"filtered_attributes":["battery"]},
+		"devices":{"0x01":{"filtered_attributes":["linkquality"]}}
+	}}`))
+
+	list, events = options(t)
+	assert.JSONEq(t, `{"filtered_attributes":["linkquality"]}`, string(list))
+	assert.JSONEq(t, `{"filtered_attributes":["linkquality"]}`, string(events))
+}

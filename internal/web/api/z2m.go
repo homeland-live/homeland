@@ -21,7 +21,7 @@ func deviceID(c fiber.Ctx) (string, error) {
 }
 
 // ListZ2MBridgeDevicesHandlerV1 lists every device with its spec, schema,
-// state and handler.
+// options, state and handler.
 func (api *API) ListZ2MBridgeDevicesHandlerV1(c fiber.Ctx) error {
 	devices := api.ctx.Z2M.Devices()
 	resp := make([]any, 0, len(devices))
@@ -30,6 +30,7 @@ func (api *API) ListZ2MBridgeDevicesHandlerV1(c fiber.Ctx) error {
 		resp = append(resp, fiber.Map{
 			"spec":    dev.Spec,
 			"schema":  dev.Schema,
+			"options": dev.Options,
 			"state":   dev.State.Props(),
 			"handler": api.ctx.Scripts.Handler(dev.Spec),
 		})
@@ -56,8 +57,8 @@ func (api *API) GetZ2MBridgeHealthHandlerV1(c fiber.Ctx) error {
 }
 
 // ListDeviceEventsHandlerV1 returns a page of a device's stored events along
-// with its spec, schema, state and handler. The device id is a friendly name
-// or an IEEE address.
+// with its spec, schema, options, state and handler. The device id is a
+// friendly name or an IEEE address.
 func (api *API) ListDeviceEventsHandlerV1(c fiber.Ctx) error {
 	id, err := deviceID(c)
 	if err != nil {
@@ -93,6 +94,7 @@ func (api *API) ListDeviceEventsHandlerV1(c fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"spec":    dev.Spec,
 		"schema":  dev.Schema,
+		"options": dev.Options,
 		"state":   state,
 		"handler": api.ctx.Scripts.Handler(dev.Spec),
 		"events":  events,

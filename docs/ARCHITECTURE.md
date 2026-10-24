@@ -58,7 +58,8 @@ sequenceDiagram
    `action`; a state with `action` is never a repeat), is dropped. The schema comes from the device's exposes in
    `bridge/devices`, minus the properties z2m's `filtered_attributes` keep out of every publish. Those come from
    `bridge/info`'s config: a device's own list replaces the `device_options` one, as in z2m. A pattern Go's regexp
-   can't compile (a JS-only lookahead, say) is logged and skipped, so its property stays required.
+   can't compile (a JS-only lookahead, say) is logged and skipped, so its property stays required. The merged
+   options are served with each device, next to its spec and schema, and shown on the UI's device page.
 3. **Storage** (`db`). The event is queued for one background writer that inserts up to 100 rows per statement and
    flushes at least every 250ms. A full queue (1024) blocks rather than losing events.
 4. **Handler run** (`svc/event`). The run is queued on the device's own worker goroutine, so scripts never run on the

@@ -21,6 +21,7 @@ import {
   listDeviceEvents,
   type Z2MDeviceSpec,
   type Z2MStateSchema,
+  type Z2MDeviceOptions,
   type DeviceState,
   type Event,
   type Page,
@@ -36,6 +37,7 @@ const ieeeAddress = computed<string>(() => String(route.params.id));
 
 const spec = ref<Z2MDeviceSpec | null>(null);
 const schema = ref<Z2MStateSchema | null>(null);
+const options = ref<Z2MDeviceOptions | null>(null);
 const state = ref<DeviceState | null>(null);
 const handler = ref<Handler | null>(null);
 const events = ref<Event[]>([]);
@@ -63,8 +65,9 @@ const error = ref<Err | undefined>();
 const isDataDialogVisible = ref<boolean>(false);
 const dataToShow = ref<object | undefined>();
 
-// detailTab selects which detail panel (current state vs exposes) is shown.
-const detailTab = ref<'state' | 'exposes'>('state');
+// detailTab selects which detail panel (current state, exposes or z2m
+// options) is shown.
+const detailTab = ref<'state' | 'exposes' | 'options'>('state');
 
 const subtitle = computed<string>(() => {
   if (!spec.value) {
@@ -115,6 +118,7 @@ function load(pageNum: number): Promise<void> {
     }
     spec.value = data.spec;
     schema.value = data.schema;
+    options.value = data.options;
     state.value = data.state;
     handler.value = data.handler;
     events.value = data.events || [];
@@ -219,6 +223,7 @@ function hideDataDialog() {
             <VTabs v-model="detailTab" density="compact" align-tabs="center" class="mt-2">
               <VTab value="state">state</VTab>
               <VTab value="exposes">exposes</VTab>
+              <VTab value="options">options</VTab>
             </VTabs>
             <VTabsWindow v-model="detailTab" class="mt-3">
               <VTabsWindowItem value="state" class="tab-item-centered">
@@ -243,6 +248,16 @@ function hideDataDialog() {
                   class="text-body-medium"
                 >
                   No data.
+                </VAlert>
+              </VTabsWindowItem>
+              <VTabsWindowItem value="options" class="tab-item-centered">
+                <!-- options is null until z2m publishes bridge/info, and
+                     when the device has none. -->
+                <DataList v-if="options" :data="options" sort />
+                <!-- No type: missing options are normal, so the alert is a
+                     neutral grey rather than a warning. -->
+                <VAlert v-else variant="tonal" density="compact" class="text-body-medium">
+                  No options set.
                 </VAlert>
               </VTabsWindowItem>
             </VTabsWindow>
@@ -333,14 +348,6 @@ function hideDataDialog() {
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-.state-row {
-  overflow-wrap: anywhere;
-}
-
-.state-value {
-  font-family: monospace;
 }
 
 .events-table {

@@ -215,10 +215,10 @@ Served under `/api/v1`:
 | --- | --- |
 | `GET /health` | Composite health tree (503 when unhealthy) |
 | `GET /status/buildinfo` | Build and runtime info |
-| `GET /z2m/bridge/devices` | Device registry: spec, state schema, current state, resolved handler |
+| `GET /z2m/bridge/devices` | Device registry: spec, state schema, z2m device options, current state, resolved handler |
 | `GET /z2m/bridge/info` | Zigbee2MQTT bridge info |
 | `GET /z2m/bridge/health` | Zigbee2MQTT bridge health |
-| `GET /z2m/devices/:id/events` | A device's stored events, latest first (`?pagenum=1&pagesize=10`, max 25) |
+| `GET /z2m/devices/:id/events` | A device's stored events, latest first (`?pagenum=1&pagesize=10`, max 25), with its spec, state schema, z2m device options, current state and resolved handler |
 | `GET /z2m/devices/:id/script` | A device's handler script |
 | `GET /scripts` | Every loaded script with its handler; `orphan` flags a script whose name matches no device |
 

@@ -25,10 +25,6 @@ function hideScriptDialog() {
 
 <template>
   <VAlert :type="error ? 'error' : 'success'" variant="tonal" :class="$attrs.class">
-    <template #prepend>
-      <i v-if="error" class="bi bi-exclamation-circle" />
-      <i v-else class="bi bi-check-circle" />
-    </template>
     <div>
       <template v-if="error">
         <div class="text-title-medium">Script error</div>
