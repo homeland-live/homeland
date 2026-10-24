@@ -14,14 +14,16 @@ type registry struct {
 
 	// addresses maps friendly name to IEEE address.
 	addresses map[string]string
-	// devices, schemas, states and filters are keyed by IEEE address.
+	// devices, schemas, states and options are keyed by IEEE address.
 	devices map[string]*DeviceSpec
 	schemas map[string]*StateSchema
 	states  map[string]*DeviceState
-	// filters holds the devices bridge/info lists with filtered_attributes of
-	// their own; every other device gets defaultFilter (device_options).
-	filters       map[string]PropFilter
-	defaultFilter PropFilter
+	// options holds the merged options (CompileDeviceOptions) of every
+	// device bridge/info's config.devices lists; one without
+	// filtered_attributes of its own holds defaultOptions. Every other device
+	// gets defaultOptions (device_options).
+	options        map[string]*DeviceOptions
+	defaultOptions *DeviceOptions
 
 	bridgeOnline bool
 }
@@ -32,17 +34,18 @@ func newRegistry() *registry {
 		devices:   make(map[string]*DeviceSpec),
 		schemas:   make(map[string]*StateSchema),
 		states:    make(map[string]*DeviceState),
-		filters:   make(map[string]PropFilter),
+		options:   make(map[string]*DeviceOptions),
 	}
 }
 
-// propFilter returns the filter of the device with IEEE address addr, nil
-// before bridge/info arrives. The caller holds mu.
-func (r *registry) propFilter(addr string) PropFilter {
-	if filter, ok := r.filters[addr]; ok {
-		return filter
+// deviceOptions returns the options of the device with IEEE address addr,
+// nil before bridge/info arrives or when neither the device nor
+// device_options sets any. The caller holds mu.
+func (r *registry) deviceOptions(addr string) *DeviceOptions {
+	if opts, ok := r.options[addr]; ok {
+		return opts
 	}
-	return r.defaultFilter
+	return r.defaultOptions
 }
 
 // addr maps a friendly name to its IEEE address; any other id is returned
@@ -73,7 +76,7 @@ func (r *registry) replaceDevices(devices []DeviceSpec) {
 		}
 		newAddresses[d.FriendlyName] = d.IEEEAddress
 		newDevices[d.IEEEAddress] = &d
-		newSchemas[d.IEEEAddress] = NewStateSchema(d.Definition, r.propFilter(d.IEEEAddress))
+		newSchemas[d.IEEEAddress] = NewStateSchema(d.Definition, r.deviceOptions(d.IEEEAddress))
 	}
 
 	r.addresses = newAddresses
@@ -139,35 +142,32 @@ func (r *registry) setState(devID string, nextState *DeviceState) (propagate boo
 	return true
 }
 
-// setOptions swaps in the filters from the latest bridge/info's config and
-// rebuilds every known device's schema (replacing it, since snapshots share
-// it), so a removed filter takes effect too. z2m merges device_options into a
-// device's own options shallowly, so a device's own list, even an empty one,
-// replaces the default. Unsupported patterns are logged and skipped.
+// setOptions swaps in the device options from the latest bridge/info's
+// config (see CompileDeviceOptions) and rebuilds every known device's schema
+// (replacing it, since snapshots share it), so a removed filter takes effect
+// too. Options are replaced, never modified, so snapshots may share them.
+// Unsupported patterns are logged once here and skipped.
 func (r *registry) setOptions(cfg BridgeConfig) {
-	defaultFilter, err := NewPropFilter(cfg.DeviceOptions.FilteredAttributes)
+	defaults, err := CompileDeviceOptions(cfg.DeviceOptions, nil)
 	if err != nil {
 		slog.Warn("z2m: ignore unsupported device_options filter", "err", err)
 	}
-	filters := make(map[string]PropFilter, len(cfg.Devices))
-	for addr, opts := range cfg.Devices {
-		if opts.FilteredAttributes == nil {
-			continue
-		}
-		filter, err := NewPropFilter(opts.FilteredAttributes)
+	options := make(map[string]*DeviceOptions, len(cfg.Devices))
+	for addr, own := range cfg.Devices {
+		opts, err := CompileDeviceOptions(own, defaults)
 		if err != nil {
 			slog.Warn("z2m: ignore unsupported device filter", "device", addr, "err", err)
 		}
-		filters[addr] = filter
+		options[addr] = opts
 	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.defaultFilter = defaultFilter
-	r.filters = filters
+	r.defaultOptions = defaults
+	r.options = options
 	for addr, d := range r.devices {
-		r.schemas[addr] = NewStateSchema(d.Definition, r.propFilter(addr))
+		r.schemas[addr] = NewStateSchema(d.Definition, r.deviceOptions(addr))
 	}
 }
 
@@ -193,9 +193,10 @@ func (r *registry) snapshot() []Device {
 	out := make([]Device, 0, len(r.devices))
 	for addr, d := range r.devices {
 		out = append(out, Device{
-			Spec:   d,
-			State:  r.states[addr],
-			Schema: r.schemas[addr],
+			Spec:    d,
+			State:   r.states[addr],
+			Schema:  r.schemas[addr],
+			Options: r.deviceOptions(addr),
 		})
 	}
 	slices.SortFunc(out, func(a, b Device) int {
@@ -217,5 +218,10 @@ func (r *registry) device(devID string) *Device {
 	if !ok {
 		return nil
 	}
-	return &Device{Spec: dev, State: r.states[addr], Schema: r.schemas[addr]}
+	return &Device{
+		Spec:    dev,
+		State:   r.states[addr],
+		Schema:  r.schemas[addr],
+		Options: r.deviceOptions(addr),
+	}
 }

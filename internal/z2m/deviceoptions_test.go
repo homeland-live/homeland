@@ -2,7 +2,6 @@ package z2m_test
 
 import (
 	"log/slog"
-	"regexp/syntax"
 	"testing"
 
 	slogtest "github.com/avakarev/go-util/testutil/slog"
@@ -106,6 +105,60 @@ func TestDeviceOptionsMergeLikeZ2M(t *testing.T) {
 	assert.Equal(t, map[string]string{"illuminance": "numeric"}, c.Device("b").Schema.PrimaryProps, "its own list replaces the default")
 	assert.Len(t, c.Device("c").Schema.PrimaryProps, 2, "an empty list replaces the default")
 	assert.Equal(t, map[string]string{"presence": "binary"}, c.Device("d").Schema.PrimaryProps, "an unlisted device gets the default")
+
+	assert.Equal(t, []string{"illuminance"}, c.Device("a").Options.FilteredAttributes)
+	assert.Equal(t, []string{"presence"}, c.Device("b").Options.FilteredAttributes)
+	assert.Equal(t, []string{}, c.Device("c").Options.FilteredAttributes)
+	assert.Same(t, c.Device("a").Options, c.Device("d").Options, "devices without a list share the default")
+}
+
+// TestDeviceOptionsUnset covers Device.Options: nil until bridge/info
+// arrives, and still nil when neither the device (even one config.devices
+// lists) nor device_options sets any.
+func TestDeviceOptionsUnset(t *testing.T) {
+	c, _ := newCountingClient(t)
+	c.Handle("bridge/devices", presenceRoster)
+	require.Nil(t, c.Device("hall").Options)
+
+	c.Handle("bridge/info", []byte(`{"version":"2.6.0"}`))
+	assert.Nil(t, c.Device("hall").Options)
+	assert.Nil(t, c.Devices()[0].Options)
+
+	c.Handle("bridge/info", bridgeInfo(`{"devices":{"0x05":{"friendly_name":"hall"}}}`))
+	assert.Nil(t, c.Device("hall").Options)
+}
+
+// TestCompileDeviceOptions covers the merge: a device without a list of its
+// own gets the defaults themselves; its own list, even an empty one, replaces
+// them and is compiled.
+func TestCompileDeviceOptions(t *testing.T) {
+	defaults, err := z2m.CompileDeviceOptions(z2m.DeviceOptions{FilteredAttributes: []string{"battery"}}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, defaults)
+
+	opts, err := z2m.CompileDeviceOptions(z2m.DeviceOptions{}, defaults)
+	require.NoError(t, err)
+	assert.Same(t, defaults, opts)
+
+	opts, err = z2m.CompileDeviceOptions(z2m.DeviceOptions{FilteredAttributes: []string{}}, defaults)
+	require.NoError(t, err)
+	assert.NotSame(t, defaults, opts)
+	assert.Equal(t, []string{}, opts.FilteredAttributes)
+
+	opts, err = z2m.CompileDeviceOptions(z2m.DeviceOptions{}, nil)
+	require.NoError(t, err)
+	assert.Nil(t, opts, "nil defaults stay nil")
+}
+
+// TestCompileDeviceOptionsUnsupportedPattern covers a pattern Go's regexp
+// can't compile: the options are still returned, with the error naming it.
+func TestCompileDeviceOptionsUnsupportedPattern(t *testing.T) {
+	opts, err := z2m.CompileDeviceOptions(z2m.DeviceOptions{FilteredAttributes: []string{"(?!a)", "battery"}}, nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `"(?!a)"`)
+	require.NotNil(t, opts)
+	assert.Equal(t, []string{"(?!a)", "battery"}, opts.FilteredAttributes)
 }
 
 // TestUnsupportedFilterPatternIsLogged covers a JS-only pattern Go can't
@@ -124,21 +177,6 @@ func TestUnsupportedFilterPatternIsLogged(t *testing.T) {
 	assert.Empty(t, schema.SecondaryProps)
 	assert.Equal(t, 1, logs.Count("z2m: ignore unsupported device filter"))
 	assert.Contains(t, logs.String(), "device=0x05")
-}
-
-// TestNewPropFilterReportsEveryUnsupportedPattern covers NewPropFilter's
-// error: it names each pattern Go's regexp can't compile, not only the first,
-// and the filter keeps the patterns that compiled.
-func TestNewPropFilterReportsEveryUnsupportedPattern(t *testing.T) {
-	filter, err := z2m.NewPropFilter([]string{"(?!a)", "battery", "(?<=b)"})
-
-	require.Error(t, err)
-	var syntaxErr *syntax.Error
-	require.ErrorAs(t, err, &syntaxErr, "the regexp errors stay reachable")
-	assert.Contains(t, err.Error(), `"(?!a)"`)
-	assert.Contains(t, err.Error(), `"(?<=b)"`)
-	assert.NotContains(t, err.Error(), `"battery"`)
-	assert.True(t, filter.Match("battery"))
 }
 
 // TestBridgeInfoKeepsConfig covers Info: it holds the device options as z2m

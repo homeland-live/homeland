@@ -195,9 +195,12 @@ export interface Handler {
 
 // Z2MDevice pairs a device's static metadata (spec) with its latest reported
 // state. `state` is a free-form property map (null until state is seen).
+// `options` are the z2m options that apply to the device (its own merged over
+// device_options), null until bridge/info arrives and when none are set.
 export interface Z2MDevice {
   spec: Z2MDeviceSpec;
   schema: Z2MStateSchema;
+  options: Z2MDeviceOptions | null;
   state: Record<string, unknown> | null;
   handler: Handler | null;
 }
@@ -326,13 +329,15 @@ export interface DeviceState {
 }
 
 // DeviceEventsResponse carries a page of a device's stored events plus the
-// device's current metadata (spec), state schema, state, and handler, so the
-// detail page can render them from one request. spec/schema/state are null
-// when the device is not known to the bridge (its stored events are still
-// returned).
+// device's current metadata (spec), state schema, z2m options, state, and
+// handler, so the detail page can render them from one request.
+// spec/schema/state are null when the device is not known to the bridge (its
+// stored events are still returned); options are null until bridge/info
+// arrives and when none are set.
 export interface DeviceEventsResponse {
   spec: Z2MDeviceSpec | null;
   schema: Z2MStateSchema | null;
+  options: Z2MDeviceOptions | null;
   state: DeviceState | null;
   handler: Handler | null;
   events?: Event[];
