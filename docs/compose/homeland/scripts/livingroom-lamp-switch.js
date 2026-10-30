@@ -1,3 +1,12 @@
+/*
+ * Toggle the living room lamp from a wall switch.
+ *
+ * Trigger: device events.
+ *
+ * The switch's `on`/`off` actions set the lamp's state; any other action is
+ * logged and ignored.
+ */
+
 /**
  * @param {DeviceState} state
  * @param {HandlerContext} ctx

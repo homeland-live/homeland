@@ -8,7 +8,7 @@ we can agree on the approach. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) expla
 You need:
 
 - Go 1.27+ with CGO and a C compiler (the SQLite driver is `mattn/go-sqlite3`).
-- Node 24 for the UI.
+- Node 24 for the UI and the docs example checks.
 - An MQTT broker with Zigbee2MQTT for running it for real. The example stack in [`docs/compose`](docs/compose)
   works; the tests need neither.
 
@@ -23,7 +23,7 @@ make dev                # server + UI watcher (long-running)
 Run these before opening a PR; CI runs the same:
 
 ```bash
-make ci                 # golangci-lint, go vet, go test -race
+make ci                 # golangci-lint, go vet, go test -race, docs-check
 cd ui && npm run ci     # UI lint, type-check and tests
 ```
 
@@ -47,8 +47,12 @@ backend.
   a real paho client.
 - **Migrations** in `internal/db/migration.go` are append-only: never edit one that has shipped.
 - **Docs.** When behavior changes, update the README, [`docs/script.d.ts`](docs/script.d.ts) (the script author
-  contract), and [`.env.example`](.env.example) for configuration. Release notes are written in the GitHub
-  release, so describe user-visible changes in the PR description.
+  contract), and [`.env.example`](.env.example) for configuration. The example gallery in
+  [`docs/README.md`](docs/README.md) is generated from [`docs/examples`](docs/examples): edit those files and run
+  `make docs`, never the generated code blocks. `make docs-examples-fmt` formats the examples,
+  `make docs-examples-fmt-check` checks their formatting and `make docs-examples-ts` type-checks them, using the
+  tools in `ui/node_modules`; the docs workflow runs both checks. Release notes are written in the GitHub release, so
+  describe user-visible changes in the PR description.
 - **New endpoints.** The API has no authentication; say so in the PR when an endpoint exposes scripts, state or
   history.
 
