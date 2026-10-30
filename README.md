@@ -179,7 +179,8 @@ module.exports = {
 | `ctx.sleep(ms)` | Pause the handler briefly (counts toward `HL_SCRIPTS_TIMEOUT`; the device's next events wait) |
 
 Full, documented type declarations for authoring (with editor autocomplete) live in [`docs/script.d.ts`](docs/script.d.ts).
-Its header shows how to type-check your scripts with a `jsconfig.json` next to them.
+Its header shows how to type-check your scripts with a `jsconfig.json` next to them. More complete automations are in
+the [example gallery](docs/README.md#example-scripts).
 
 ## Configuration
 
@@ -237,7 +238,8 @@ make build   # build ./bin/server
 make dev     # run server + UI watcher together (goreman)
 make test    # gotestsum: go test -race ./...
 make lint    # golangci-lint
-make ci      # lint + vet + test
+make ci      # lint + vet + test + docs-check
+make docs    # regenerate the example gallery in docs/README.md
 ```
 
 `make dev` is a long-running process - start it in your own terminal.
@@ -246,6 +248,7 @@ make ci      # lint + vet + test
 
 ```
 cmd/server/        entrypoint
+cmd/gen-docs/      build-time tool: generates docs/README.md code blocks
 internal/
   config/          environment-based configuration
   mqtt/            generic MQTT client (no z2m knowledge)
@@ -259,6 +262,8 @@ internal/
   web/             Fiber HTTP server, API, static UI
 docs/
   script.d.ts      handler type declarations
+  README.md        docs index and example-script gallery
+  examples/        example scripts the gallery is generated from
   compose/         example docker-compose stack
 ui/                static web UI
 ```

@@ -1,0 +1,46 @@
+name: docs
+
+# The main ci workflow ignores docs/** and *.md, so this one covers them:
+# it verifies docs/README.md is regenerated from the example scripts, and that
+# the examples are formatted and type-check against script.d.ts, whenever
+# those files, the generator, the Makefile that includes docs/targets.mk or the
+# UI tooling that checks them change.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'cmd/gen-docs/**'
+      - 'Makefile'
+      - 'ui/package-lock.json'
+      - 'ui/.oxfmtrc.json'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'cmd/gen-docs/**'
+      - 'Makefile'
+      - 'ui/package-lock.json'
+      - 'ui/.oxfmtrc.json'
+      - '.github/workflows/docs.yml'
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Docs up to date
+        run: make docs-check
+  examples-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.22' # keep in sync with ci.yml and the Dockerfile
+      - name: Format & type-check examples
+        run: make docs-examples-fmt-check docs-examples-ts

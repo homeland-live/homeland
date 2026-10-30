@@ -1,4 +1,5 @@
 ARG GO_VERSION=1.27
+# keep in sync with ci.yml and docs.yml
 ARG NODE_VERSION=24.22
 
 FROM golang:${GO_VERSION}-alpine AS server-builder

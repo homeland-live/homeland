@@ -9,6 +9,7 @@ authors.
 
 ```
 cmd/server            entrypoint: loads config, builds web/context, serves until SIGINT/SIGTERM, shuts down
+cmd/gen-docs          build-time tool: embeds docs/examples into docs/README.md (`make docs`)
 internal/
   config              environment-only configuration
   mqtt                generic paho client (no Zigbee2MQTT knowledge)

@@ -35,7 +35,10 @@ test:
 	@gotestsum --format standard-verbose -- -v -race ./...
 .PHONY: test
 
-ci: lint vet test
+# Optional: the Docker builder runs `make build` without docs/.
+-include docs/targets.mk
+
+ci: lint vet test docs-check
 
 build:
 	@echo ">> Building ./bin/server..."
