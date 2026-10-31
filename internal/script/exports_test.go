@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"testing"
+	"time"
 
 	slogtest "github.com/avakarev/go-util/testutil/slog"
 	"github.com/stretchr/testify/assert"
@@ -210,5 +211,17 @@ func TestThrowingExportGetterYieldsBrokenHandler(t *testing.T) {
 	h, err := script.Compile(newScript(`module.exports = { get handle() { throw new Error("nope"); } };`), nil, nil, 0)
 	require.NoError(t, err)
 	require.ErrorContains(t, h.Error, "nope")
+	assert.NotContains(t, buf.String(), "recovered panic")
+}
+
+func TestLoopingExportGetterTimesOut(t *testing.T) {
+	// A timeout while reading exports is the script's mistake, reported as a
+	// timeout like one in the top-level code, not as a recovered host panic.
+	buf := slogtest.Capture(t, slog.LevelError)
+	h, err := script.Compile(newScript(`module.exports = { get handle() { while (true) {} } };`), nil, nil, 20*time.Millisecond)
+	require.NoError(t, err)
+	require.Error(t, h.Error)
+	assert.Contains(t, h.Error.Error(), "script: compile: top-level evaluation timed out after 20ms")
+	assert.NotContains(t, h.Error.Error(), "panicked")
 	assert.NotContains(t, buf.String(), "recovered panic")
 }
