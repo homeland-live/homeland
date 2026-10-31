@@ -27,6 +27,10 @@ type Context struct {
 	// nil (never ready) when the run has no timeout.
 	timedOut chan struct{}
 
+	// unhandled holds the promises the current run rejected with no handler
+	// attached yet (see trackRejection); run clears it.
+	unhandled []*goja.Promise
+
 	// jobs is set once by Compile and never changes afterwards.
 	jobs []ScheduledJob
 }
@@ -42,7 +46,25 @@ func (ctx *Context) recoverPanic(what string, err *error) {
 	}
 	slog.Error("script: recovered panic", "script", ctx.script.FileName, "run", what,
 		"panic", r, "stack", string(debug.Stack()))
-	*err = fmt.Errorf("script: %s panicked: %v", what, r)
+	*err = fmt.Errorf("%s panicked: %v", what, r)
+}
+
+// run runs fn as one run named what: bounded by timeout (see withTimeout),
+// with a Go panic recovered (see recoverPanic), and failing when fn returns a
+// promise that rejected or never settled, or leaves any promise rejected
+// without a handler (see settle). Rejections never carry over to the next
+// run. The caller holds the Handler's mutex, or owns ctx (Compile).
+func (ctx *Context) run(timeout time.Duration, what string, fn func() (goja.Value, error)) error {
+	return ctx.withTimeout(timeout, what, func() (err error) {
+		defer ctx.recoverPanic(what, &err)
+		defer func() { ctx.unhandled = nil }()
+
+		ret, err := fn()
+		if err != nil {
+			return err
+		}
+		return ctx.settle(ret)
+	})
 }
 
 // withTimeout runs fn, bounded by timeout (<= 0 disables it), and returns its
@@ -162,6 +184,7 @@ func newContext(script *Script, z2m Z2M, mqtt MQTT) (*Context, error) {
 
 	// Must be set before any Go struct is handed to the runtime.
 	ctx.runtime.SetFieldNameMapper(goja.UncapFieldNameMapper())
+	ctx.runtime.SetPromiseRejectionTracker(ctx.trackRejection)
 
 	if err := ctx.install(); err != nil {
 		return nil, err

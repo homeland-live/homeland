@@ -72,9 +72,12 @@ sequenceDiagram
 - A script is `<device-id>.js` in `HL_SCRIPTS_DIR`, where the id is a friendly name or an IEEE address. It runs as
   the body of a strict-mode CommonJS-style function and sets `module.exports = { handle, jobs }`.
 - `svc/scripts` compiles every script at startup into a `script.Handler`, each with its own goja runtime. Script
-  mistakes (syntax errors, a top-level throw, invalid exports or cron expressions, more than `script.MaxJobs` (20)
-  jobs) produce a *broken handler* that runs nothing and is shown in the API and UI; they never stop the service.
+  mistakes (syntax errors, a top-level throw or unhandled promise rejection, invalid exports or cron expressions,
+  more than `script.MaxJobs` (20) jobs) produce a *broken handler* that runs nothing and is shown in the API and UI;
+  they never stop the service.
 - `Handle` and `RunJob` on one handler are serialized by its mutex, and `HL_SCRIPTS_TIMEOUT` interrupts any run.
+  `handle` and `run` may be async: goja runs every queued promise job before the call returns (there is no event
+  loop), so a rejected or never-settled returned promise, or a rejection nothing handles, fails the run like a throw.
 - With `HL_SCRIPTS_WATCHER=true`, file changes are debounced per file and synced from disk. Handler changes fan out
   through `svc/scripts.Subscribe`; the scheduler is the subscriber that keeps gocron jobs in sync.
 - A device may have only one script. When it has one under both its ids, `svc/scripts.Service.Handler` returns a

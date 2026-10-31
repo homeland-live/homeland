@@ -23,10 +23,10 @@ const (
 // least one job, or both (see readExports). z2m and mqtt back ctx.z2m and
 // ctx.mqtt; a nil one makes its API throw in the script.
 //
-// Script-author mistakes (a syntax error, a throw or timeout at top level, or
-// invalid exports, including an invalid cron expression) yield a broken
-// handler with Handler.Error set, not an error. The returned error is reserved
-// for host-side setup failures.
+// Script-author mistakes (a syntax error, a throw, timeout or unhandled
+// promise rejection at top level, or invalid exports, including an invalid
+// cron expression) yield a broken handler with Handler.Error set, not an
+// error. The returned error is reserved for host-side setup failures.
 //
 // timeout bounds the top-level evaluation and every later Handle and RunJob
 // call; <= 0 disables it.
@@ -47,19 +47,18 @@ func Compile(script *Script, z2m Z2M, mqtt MQTT, timeout time.Duration) (*Handle
 
 	// Exports are read once, so changing module.exports later has no effect.
 	// Reading them can run script code (a getter or a Proxy), so it shares the
-	// evaluation's timeout and panic guard.
+	// evaluation's run (timeout, panic guard and promise check).
 	var handle goja.Callable
-	err = ctx.withTimeout(timeout, "top-level evaluation", func() (err error) {
-		defer ctx.recoverPanic("top-level evaluation", &err)
+	err = ctx.run(timeout, "top-level evaluation", func() (goja.Value, error) {
 		exports, err := ctx.runModule(prg)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		// Try turns a throw from script code run by the read into an error.
 		if ex := ctx.runtime.Try(func() { handle, ctx.jobs, err = readExports(exports) }); ex != nil {
-			return ex
+			return nil, ex
 		}
-		return err
+		return nil, err
 	})
 	if err != nil {
 		return broken(err), nil
