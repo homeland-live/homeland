@@ -25,16 +25,13 @@ const WatchDebounce = 100 * time.Millisecond
 // file is recompiled and a missing one dropped, whatever the events were.
 // Event handling and syncs run on one goroutine, so they never overlap.
 type watcher struct {
-	svc      *Service
-	dir      string
-	fsw      *fsnotify.Watcher
-	debounce time.Duration
+	svc *Service
+	dir string
+	fsw *fsnotify.Watcher
 
-	// pending holds a debounce timer per changed file name. Only the loop
-	// goroutine touches it.
-	pending map[string]*time.Timer
-	// due receives file names whose debounce timer fired.
-	due chan string
+	// debounce delays each changed file's sync. Only the loop goroutine
+	// calls it.
+	debounce *debouncer
 
 	wg   sync.WaitGroup
 	done chan struct{}
@@ -50,14 +47,13 @@ func newWatcher(svc *Service) (*watcher, error) {
 		return nil, err
 	}
 
+	done := make(chan struct{})
 	w := &watcher{
 		svc:      svc,
 		dir:      dir,
 		fsw:      fsw,
-		debounce: WatchDebounce,
-		pending:  make(map[string]*time.Timer),
-		due:      make(chan string),
-		done:     make(chan struct{}),
+		debounce: newDebouncer(WatchDebounce, done),
+		done:     done,
 	}
 
 	if err := fsw.Add(dir); err != nil {
@@ -88,9 +84,10 @@ func (w *watcher) loop() {
 				return
 			}
 			w.handleEvent(event)
-		case name := <-w.due:
-			delete(w.pending, name)
-			w.sync(name)
+		case f := <-w.debounce.due:
+			if w.debounce.take(f) {
+				w.sync(f.name)
+			}
 		case err, ok := <-w.fsw.Errors:
 			if !ok {
 				return
@@ -101,23 +98,14 @@ func (w *watcher) loop() {
 }
 
 // handleEvent (re)starts the debounce timer of the script file an event is
-// about. Events for other files are ignored.
+// about, superseding a sync already due but not yet run, so a file is synced
+// only once its burst of events ends. Events for other files are ignored.
 func (w *watcher) handleEvent(event fsnotify.Event) {
 	name := filepath.Base(event.Name)
 	if !script.IsScriptFile(name) {
 		return
 	}
-	if t, ok := w.pending[name]; ok {
-		// If it already fired, the file is synced twice, which is harmless.
-		t.Reset(w.debounce)
-		return
-	}
-	w.pending[name] = time.AfterFunc(w.debounce, func() {
-		select {
-		case w.due <- name:
-		case <-w.done:
-		}
-	})
+	w.debounce.touch(name)
 }
 
 // sync makes the cache match the file name on disk: a readable file is
@@ -148,9 +136,7 @@ func (w *watcher) sync(name string) {
 func (w *watcher) close() {
 	close(w.done)
 	w.wg.Wait()
-	for _, t := range w.pending {
-		t.Stop()
-	}
+	w.debounce.stop()
 	if w.fsw == nil {
 		return
 	}
