@@ -54,9 +54,10 @@ func Compile(script *Script, z2m Z2M, mqtt MQTT, timeout time.Duration) (*Handle
 		if err != nil {
 			return nil, err
 		}
-		// Try turns a throw from script code run by the read into an error.
-		if ex := ctx.runtime.Try(func() { handle, ctx.jobs, err = readExports(exports) }); ex != nil {
-			return nil, ex
+		// try turns a throw or timeout in script code run by the read into an
+		// error.
+		if tryErr := ctx.try(func() { handle, ctx.jobs, err = readExports(exports) }); tryErr != nil {
+			return nil, tryErr
 		}
 		return nil, err
 	})

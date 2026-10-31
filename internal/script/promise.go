@@ -31,11 +31,11 @@ func (ctx *Context) trackRejection(p *goja.Promise, op goja.PromiseRejectionOper
 //     rejection".
 //
 // Rendering a rejection reason can run script code (a custom toString or
-// stack getter), so a throw there is returned as the error.
-func (ctx *Context) settle(ret goja.Value) (err error) {
+// stack getter), so a throw or timeout there is returned as the error.
+func (ctx *Context) settle(ret goja.Value) error {
 	unhandled := ctx.unhandled
 	var errs []error
-	if ex := ctx.runtime.Try(func() {
+	if err := ctx.try(func() {
 		if p, ok := exportPromise(ret); ok {
 			switch p.State() {
 			case goja.PromiseStateRejected:
@@ -48,8 +48,8 @@ func (ctx *Context) settle(ret goja.Value) (err error) {
 		for _, p := range unhandled {
 			errs = append(errs, fmt.Errorf("unhandled promise rejection: %w", rejectionError(p.Result())))
 		}
-	}); ex != nil {
-		return ex
+	}); err != nil {
+		return err
 	}
 	return errors.Join(errs...)
 }

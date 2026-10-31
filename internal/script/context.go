@@ -49,6 +49,27 @@ func (ctx *Context) recoverPanic(what string, err *error) {
 	*err = fmt.Errorf("%s panicked: %v", what, r)
 }
 
+// try runs fn, which may call into script code, and returns what the script
+// code throws as an error. Unlike Runtime.Try, it also returns an interrupt
+// (the run timing out) as an error rather than panicking: goja re-panics
+// uncatchable exceptions out of Try, and recoverPanic would report that as a
+// host bug. Any other panic propagates.
+func (ctx *Context) try(fn func()) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			ie, ok := r.(*goja.InterruptedError)
+			if !ok {
+				panic(r)
+			}
+			err = ie
+		}
+	}()
+	if ex := ctx.runtime.Try(fn); ex != nil {
+		return ex
+	}
+	return nil
+}
+
 // run runs fn as one run named what: bounded by timeout (see withTimeout),
 // with a Go panic recovered (see recoverPanic), and failing when fn returns a
 // promise that rejected or never settled, or leaves any promise rejected

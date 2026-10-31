@@ -1,9 +1,11 @@
 package script_test
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
+	slogtest "github.com/avakarev/go-util/testutil/slog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -165,4 +167,22 @@ module.exports = { handle() {} };
 	require.Error(t, h.Error)
 	assert.Contains(t, h.Error.Error(), "script: compile: unhandled promise rejection: Error: init at test.js:2:")
 	assert.False(t, h.HasHandle)
+}
+
+func TestHandleTimesOutRenderingRejection(t *testing.T) {
+	// Rendering a rejection reason runs its toString; a loop there is the
+	// script's timeout, not a recovered host panic.
+	buf := slogtest.Capture(t, slog.LevelError)
+	h, err := script.Compile(newScript(`
+function handle() {
+    return Promise.reject({ toString() { while (true) {} } });
+}
+module.exports = { handle };
+`), nil, nil, 20*time.Millisecond)
+	require.NoError(t, err)
+
+	err = h.Handle(map[string]any{})
+	require.ErrorContains(t, err, "script: handle: handler timed out after 20ms")
+	assert.NotContains(t, err.Error(), "panicked")
+	assert.NotContains(t, buf.String(), "recovered panic")
 }
