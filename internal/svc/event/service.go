@@ -31,13 +31,20 @@ type Z2M interface {
 	Subscribe(fn z2m.UpdateFunc)
 }
 
+// Store stores device events. Satisfied by *db.Repo.
+type Store interface {
+	// EnqueueEvent queues e for storage. It may block while the queue is
+	// full, and fails once the store is closed.
+	EnqueueEvent(e *db.Event) error
+}
+
 // Service subscribes to z2m device updates, queues each one for storage, and
 // runs the device's handler on that device's worker goroutine. It does not own
 // the z2m client, the script service or the database; the caller does.
 type Service struct {
 	handlers Handlers
 	z2m      Z2M
-	db       *db.Repo
+	store    Store
 
 	// mu guards stopped, workers, and the wg.Add calls that pair with them.
 	mu      sync.Mutex
@@ -146,14 +153,14 @@ func (svc *Service) work(runs <-chan run) {
 // persist queues the device's raw state for storage, keyed by IEEE address and
 // stamped with the time the state was parsed. Failures are logged, so they
 // never stop the handler from running.
-func (svc *Service) persist(s *z2m.Device) {
-	if svc.db == nil || s.State == nil {
+func (svc *Service) persist(dev *z2m.Device) {
+	if svc.store == nil || dev.State == nil {
 		return
 	}
-	event := &db.Event{IEEEAddress: s.Spec.IEEEAddress, Payload: s.State.Raw}
-	event.CreatedAt = s.State.CreatedAt
-	if err := svc.db.EnqueueEvent(event); err != nil {
-		slog.Error("svc/event: event persist error", "device", s.Spec.FriendlyName, "err", err)
+	e := &db.Event{IEEEAddress: dev.Spec.IEEEAddress, Payload: dev.State.Raw}
+	e.CreatedAt = dev.State.CreatedAt
+	if err := svc.store.EnqueueEvent(e); err != nil {
+		slog.Error("svc/event: event persist error", "device", dev.Spec.FriendlyName, "err", err)
 	}
 }
 
@@ -200,11 +207,12 @@ func (svc *Service) Shutdown() {
 }
 
 // New returns a service over the given dependencies; call Start to subscribe.
-func New(handlers Handlers, z2mClient Z2M, repo *db.Repo) *Service {
+// A nil store stores nothing.
+func New(handlers Handlers, z2mClient Z2M, store Store) *Service {
 	return &Service{
 		handlers: handlers,
 		z2m:      z2mClient,
-		db:       repo,
+		store:    store,
 		workers:  make(map[string]chan run),
 		quit:     make(chan struct{}),
 	}
