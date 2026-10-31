@@ -68,12 +68,18 @@ type updates struct{ fn z2m.UpdateFunc }
 
 func (u *updates) Subscribe(fn z2m.UpdateFunc) { u.fn = fn }
 
-// serviceWith starts an event Service over handlers, without a DB, and
+// serviceWith starts an event Service over handlers, storing no events, and
 // returns it with a func that delivers an update to it.
 func serviceWith(t *testing.T, handlers handlerMap) (svc *event.Service, deliver z2m.UpdateFunc) {
 	t.Helper()
+	return serviceWithStore(t, handlers, nil)
+}
+
+// serviceWithStore is serviceWith, storing events in store.
+func serviceWithStore(t *testing.T, handlers handlerMap, store event.Store) (svc *event.Service, deliver z2m.UpdateFunc) {
+	t.Helper()
 	src := &updates{}
-	svc = event.New(handlers, src, nil)
+	svc = event.New(handlers, src, store)
 	require.NoError(t, svc.Start())
 	require.NotNil(t, src.fn, "Start must subscribe to device updates")
 	return svc, src.fn
