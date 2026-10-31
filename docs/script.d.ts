@@ -87,7 +87,9 @@
  * The publish methods target a device by its Zigbee2MQTT friendly name and
  * publish to its `<friendly-name>/set[...]` topic under the Zigbee2MQTT base
  * topic (HL_Z2M_MQTT_BASE_TOPIC). With HL_Z2M_MQTT_READONLY=true they log
- * instead of sending. They throw when the broker connection is down.
+ * instead of sending. They throw when the broker connection is down, or when
+ * the topic is invalid: empty, or containing a `+` or `#` wildcard, a NUL or
+ * invalid UTF-8 (a friendly name or prop such as `"lamp/#"`).
  */
 interface Z2M {
   /**
@@ -130,7 +132,8 @@ interface Z2M {
  *
  * Only available when an external broker is configured; otherwise
  * `publish` throws. With HL_EXT_MQTT_READONLY=true it logs instead of sending.
- * It throws when the broker connection is down.
+ * It throws when the broker connection is down, or when the topic is invalid:
+ * empty, or containing a `+` or `#` wildcard, a NUL or invalid UTF-8.
  */
 interface MQTT {
   /**

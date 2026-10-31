@@ -54,6 +54,38 @@ func TestPublishPrefixesBaseTopic(t *testing.T) {
 	assert.Equal(t, []string{"zigbee2mqtt/lamp/set"}, b.Published())
 }
 
+func TestPublishRejectsInvalidTopic(t *testing.T) {
+	b := mqtttest.StartBroker(t, "127.0.0.1:0")
+	c := connectedClient(t, b, config.MQTTConn{})
+
+	for _, tc := range []struct {
+		name, topic, err string
+	}{
+		{name: "empty", topic: "", err: "topic is empty"},
+		{name: "single-level wildcard", topic: "room/+/set", err: "wildcard"},
+		{name: "multi-level wildcard", topic: "lamp/#", err: "wildcard"},
+		{name: "NUL", topic: "lamp\x00/set", err: "NUL"},
+		{name: "invalid UTF-8", topic: "lamp\xff/set", err: "UTF-8"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.ErrorContains(t, c.Publish(tc.topic, []byte(`{}`)), tc.err)
+		})
+	}
+
+	flush(t, c)
+	assert.Empty(t, b.Published(), "an invalid topic must never reach the broker")
+	assert.True(t, c.IsConnected())
+}
+
+func TestPublishReadOnlyRejectsInvalidTopic(t *testing.T) {
+	c, err := mqtt.New(config.MQTTConn{Broker: "tcp://" + mqtttest.FreeAddr(t), BaseTopic: "zigbee2mqtt", ReadOnly: true})
+	require.NoError(t, err)
+
+	// Read-only mode must surface the same mistakes as a live connection.
+	require.ErrorContains(t, c.Publish("lamp/#", []byte(`{}`)), `publish to "zigbee2mqtt/lamp/#"`)
+	assert.NoError(t, c.Publish("lamp/set", []byte(`{}`)))
+}
+
 func TestPublishReadOnlyDoesNotSend(t *testing.T) {
 	b := mqtttest.StartBroker(t, "127.0.0.1:0")
 	c := connectedClient(t, b, config.MQTTConn{ReadOnly: true})
