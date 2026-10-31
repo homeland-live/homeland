@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
@@ -199,11 +200,16 @@ func (c *Client) Subscribe(topic string, handler MessageHandler) error {
 }
 
 // Publish publishes to a BaseTopic-relative topic at QoS 0, not retained. A
-// ReadOnly connection logs the publish instead of sending it. Without an open
-// connection it returns an error: paho would otherwise drop a QoS 0 message
-// during a reconnect and still report success.
+// topic the MQTT spec forbids in a PUBLISH (see validatePubTopic) returns an
+// error and is never sent, ReadOnly or not. A ReadOnly connection logs the
+// publish instead of sending it. Without an open connection it returns an
+// error: paho would otherwise drop a QoS 0 message during a reconnect and
+// still report success.
 func (c *Client) Publish(topic string, payload []byte) error {
 	full := c.prefix(topic)
+	if err := validatePubTopic(full); err != nil {
+		return fmt.Errorf("mqtt: publish to %q: %w", full, err)
+	}
 	if c.cfg.ReadOnly {
 		slog.Info("mqtt: read-only, skipping publish", "topic", full, "payload", string(payload))
 		return nil
@@ -217,5 +223,23 @@ func (c *Client) Publish(topic string, payload []byte) error {
 		return fmt.Errorf("mqtt: publish to %q: %w", full, err)
 	}
 	slog.Info("mqtt: published", "topic", full, "payload", string(payload))
+	return nil
+}
+
+// validatePubTopic rejects a topic the MQTT spec forbids in a PUBLISH: an
+// empty one, or one with a wildcard (+ or #), a NUL or invalid UTF-8. paho
+// sends such a topic as is, and brokers such as Mosquitto disconnect the
+// client for it.
+func validatePubTopic(topic string) error {
+	switch {
+	case topic == "":
+		return errors.New("topic is empty")
+	case strings.ContainsAny(topic, "+#"):
+		return errors.New("topic contains a wildcard (+ or #)")
+	case strings.ContainsRune(topic, 0):
+		return errors.New("topic contains a NUL character")
+	case !utf8.ValidString(topic):
+		return errors.New("topic is not valid UTF-8")
+	}
 	return nil
 }
