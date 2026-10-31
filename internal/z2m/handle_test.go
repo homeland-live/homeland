@@ -100,9 +100,31 @@ func TestDeviceWithoutDefinitionPropagates(t *testing.T) {
 	assert.Equal(t, map[string]any{"state": "OFF"}, c.DeviceState("diy").Props())
 }
 
-// TestHandleIgnoresNonStateTopics covers what the "#" subscription delivers
-// besides device state: commands, availability and bridge topics must neither
-// change a device's state nor notify.
+// TestIsStateTopic covers which base-topic-relative topics are device state:
+// a friendly name, which may contain slashes, but not the base topic itself,
+// bridge, command or availability topics.
+func TestIsStateTopic(t *testing.T) {
+	for _, topic := range []string{
+		"lamp", "room/lamp", "0x00158d0001a2b3c4",
+		// Only whole segments count.
+		"settings", "lamp/setup", "lamp/getter", "budget", "bridges", "bridge-lamp", "availability-sensor",
+	} {
+		assert.True(t, z2m.IsStateTopic(topic), topic)
+	}
+	for _, topic := range []string{
+		"", "bridge", "bridge/state", "bridge/devices", "bridge/logging", "bridge/request/permit_join",
+		"set", "lamp/set", "lamp/set/state", "room/lamp/set",
+		"get", "lamp/get", "lamp/get/state",
+		"availability", "lamp/availability", "room/lamp/availability",
+	} {
+		assert.False(t, z2m.IsStateTopic(topic), topic)
+	}
+}
+
+// TestHandleIgnoresNonStateTopics covers routing what the "#" subscription
+// delivers besides device state: a command, availability or bridge topic of a
+// known device must neither change its state nor notify. Which topics are
+// state is covered by TestIsStateTopic.
 func TestHandleIgnoresNonStateTopics(t *testing.T) {
 	c, calls := newCountingClient(t)
 	c.Handle("bridge/devices", []byte(`[
