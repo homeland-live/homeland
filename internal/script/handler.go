@@ -49,7 +49,9 @@ func (h *Handler) Script() *Script {
 // returns Error for a broken handler and is a no-op for a nil handler or a
 // script without a handle function. A call that outruns the timeout is
 // interrupted and returns an error, and so does a Go panic raised during the
-// call.
+// call. An async handle fails like a throwing one: the call returns an error
+// when its promise rejects or never settles, and when any promise the call
+// rejected is left without a handler.
 func (h *Handler) Handle(state any) error {
 	if h == nil {
 		return nil
@@ -64,13 +66,13 @@ func (h *Handler) Handle(state any) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	return h.ctx.withTimeout(h.timeout, "handler", func() (err error) {
-		defer h.ctx.recoverPanic("handler", &err)
-		if _, err = h.handle(goja.Undefined(), h.ctx.runtime.ToValue(state), h.ctx.ctxArg); err != nil {
-			return fmt.Errorf("script: handle: %w", err)
-		}
-		return nil
+	err := h.ctx.run(h.timeout, "handler", func() (goja.Value, error) {
+		return h.handle(goja.Undefined(), h.ctx.runtime.ToValue(state), h.ctx.ctxArg)
 	})
+	if err != nil {
+		return fmt.Errorf("script: handle: %w", err)
+	}
+	return nil
 }
 
 // Jobs returns the jobs the script exports in module.exports.jobs, in order,
@@ -83,9 +85,10 @@ func (h *Handler) Jobs() []ScheduledJob {
 	return h.ctx.jobs
 }
 
-// RunJob runs a scheduled callback as fn(ctx), with the same serialization and
-// timeout as Handle, and returns a Go panic during the call as an error. It
-// returns Error for a broken handler and is a no-op for a nil handler.
+// RunJob runs a scheduled callback as fn(ctx), with the same serialization,
+// timeout and promise handling as Handle, and returns a Go panic during the
+// call as an error. It returns Error for a broken handler and is a no-op for a
+// nil handler.
 func (h *Handler) RunJob(job ScheduledJob) error {
 	if h == nil {
 		return nil
@@ -97,13 +100,13 @@ func (h *Handler) RunJob(job ScheduledJob) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	return h.ctx.withTimeout(h.timeout, "scheduled job", func() (err error) {
-		defer h.ctx.recoverPanic("scheduled job", &err)
-		if _, err = job.fn(goja.Undefined(), h.ctx.ctxArg); err != nil {
-			return fmt.Errorf("script: run scheduled job: %w", err)
-		}
-		return nil
+	err := h.ctx.run(h.timeout, "scheduled job", func() (goja.Value, error) {
+		return job.fn(goja.Undefined(), h.ctx.ctxArg)
 	})
+	if err != nil {
+		return fmt.Errorf("script: run scheduled job: %w", err)
+	}
+	return nil
 }
 
 // NewBrokenHandler returns a broken handler for s: it runs nothing, has no

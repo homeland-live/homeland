@@ -51,6 +51,13 @@
 //     an invalid job (see Job), or neither `handle` nor a job.
 //   - Errors thrown during a run, including those thrown by ctx methods, are
 //     logged. They never stop later runs.
+//   - `handle` and a job's `run` may be async. There is no event loop:
+//     `await` only waits for promises, there is no `setTimeout`, and
+//     `ctx.sleep` blocks. Whatever can settle settles before the run ends,
+//     so a rejection fails the run like a throw, and so does a returned
+//     promise that never settles or a rejected promise nothing handles (such
+//     as an async call that isn't awaited). At the top level, an unhandled
+//     rejection makes the script broken.
 //
 // These declarations mirror the runtime contract implemented by the Go
 // `internal/script` package (goja ECMAScript engine). They exist only for
@@ -233,10 +240,12 @@ interface HandlerContext {
  *   - a press replayed by the broker after a reconnect: the state it
  *     arrived with still counts if it changed, without `action`.
  *
+ * It may be async (see the runtime model above).
+ *
  * @param state The device's full latest state.
  * @param ctx   Host APIs: log, sleep, z2m and mqtt.
  */
-type Handle = (state: DeviceState, ctx: HandlerContext) => void;
+type Handle = (state: DeviceState, ctx: HandlerContext) => void | Promise<void>;
 
 /**
  * A cron-scheduled job. `run` is called at every tick of `cron`,
@@ -254,8 +263,8 @@ type Handle = (state: DeviceState, ctx: HandlerContext) => void;
 interface Job {
   /** Crontab expression or descriptor, optionally TZ-prefixed. */
   cron: string;
-  /** Callback invoked as `run(ctx)` at each tick. */
-  run(ctx: HandlerContext): void;
+  /** Callback invoked as `run(ctx)` at each tick. It may be async. */
+  run(ctx: HandlerContext): void | Promise<void>;
 }
 
 /**
