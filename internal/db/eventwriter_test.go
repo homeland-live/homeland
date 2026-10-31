@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -120,11 +121,12 @@ func TestEventWriterKeepsGoodRowsOfAFailedBatch(t *testing.T) {
 	require.NoError(t, s.EnqueueEvent(event(t, "lamp", `{"n":2}`)))
 	require.NoError(t, s.EnqueueEvent(event(t, "lamp", `{"n":3}`)))
 
-	require.Eventually(t, func() bool { return countEvents(t, s, "lamp") == 3 },
-		3*time.Second, 10*time.Millisecond)
-	hc := s.HealthCheck()
-	assert.False(t, hc.IsHealthy, "a lost event must make the db unhealthy")
-	assert.Contains(t, hc.Error, "lost 1 event(s)")
+	// The writer stores the good rows before it records the loss, so wait
+	// for the loss.
+	require.Eventually(t, func() bool { return !s.HealthCheck().IsHealthy },
+		3*time.Second, 10*time.Millisecond, "a lost event must make the db unhealthy")
+	assert.Contains(t, s.HealthCheck().Error, "lost 1 event(s)")
+	assert.Equal(t, 3, countEvents(t, s, "lamp"))
 
 	// A later fully written batch clears it.
 	require.NoError(t, s.EnqueueEvent(event(t, "lamp", `{"n":4}`)))
@@ -133,17 +135,57 @@ func TestEventWriterKeepsGoodRowsOfAFailedBatch(t *testing.T) {
 	assert.Equal(t, 4, countEvents(t, s, "lamp"))
 }
 
+// countInserts counts the INSERTs s attempts from now on.
+func countInserts(t *testing.T, s *db.Repo) *atomic.Int64 {
+	t.Helper()
+	var n atomic.Int64
+	require.NoError(t, s.OnInsert(func() { n.Add(1) }))
+	return &n
+}
+
 func TestEventWriterGivesUpOnAFailingDatabase(t *testing.T) {
 	s := openTemp(t)
 	require.NoError(t, s.ExecSQL("DROP TABLE events"))
+	inserts := countInserts(t, s)
 
+	// Enqueued well within a flush interval, so they form one batch.
 	for i := range 10 {
 		require.NoError(t, s.EnqueueEvent(event(t, "lamp", fmt.Sprintf(`{"n":%d}`, i))))
 	}
 
 	// Every write fails: the writer must report it rather than drop silently.
-	assert.Eventually(t, func() bool { return !s.HealthCheck().IsHealthy },
+	require.Eventually(t, func() bool { return !s.HealthCheck().IsHealthy },
 		3*time.Second, 10*time.Millisecond)
-	assert.Contains(t, s.HealthCheck().Error, "event writer lost")
+	assert.Contains(t, s.HealthCheck().Error, "event writer lost 10 event(s)")
+	assert.Equal(t, int64(1+3), inserts.Load(),
+		"the batch, then rows until 3 fail in a row; the rest are given up untried")
 	assert.Equal(t, -1, countEvents(t, s, "lamp"), "nothing can be stored without the table")
+}
+
+func TestEventWriterRetriesEveryRowBetweenSuccesses(t *testing.T) {
+	s := openTemp(t)
+	// Four events whose ids the batch below reuses, so those rows fail.
+	taken := make([]*db.Event, 4)
+	for i := range taken {
+		taken[i] = event(t, "lamp", fmt.Sprintf(`{"taken":%d}`, i))
+		require.NoError(t, s.CreateEvent(taken[i]))
+	}
+	inserts := countInserts(t, s)
+
+	// Failing rows alternate with good ones, so failures never run 3 in a
+	// row and every row is tried.
+	for i, e := range taken {
+		dup := event(t, "lamp", fmt.Sprintf(`{"dup":%d}`, i))
+		dup.ID = e.ID
+		require.NoError(t, s.EnqueueEvent(dup))
+		if i < len(taken)-1 {
+			require.NoError(t, s.EnqueueEvent(event(t, "lamp", fmt.Sprintf(`{"good":%d}`, i))))
+		}
+	}
+
+	require.Eventually(t, func() bool { return !s.HealthCheck().IsHealthy },
+		3*time.Second, 10*time.Millisecond)
+	assert.Contains(t, s.HealthCheck().Error, "event writer lost 4 event(s)")
+	assert.Equal(t, int64(1+7), inserts.Load(), "the batch, then each of its 7 rows")
+	assert.Equal(t, 4+3, countEvents(t, s, "lamp"), "every good row is stored")
 }
