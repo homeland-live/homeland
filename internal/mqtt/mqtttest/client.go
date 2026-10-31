@@ -5,6 +5,8 @@ package mqtttest
 
 import (
 	"errors"
+	"slices"
+	"sync"
 
 	"github.com/homeland-live/homeland/internal/healthcheck"
 	"github.com/homeland-live/homeland/internal/mqtt"
@@ -13,11 +15,22 @@ import (
 // BaseTopic is the base topic Client reports.
 const BaseTopic = "zigbee2mqtt"
 
-// Client is a fake MQTT client with no broker: it connects, subscribes and
-// publishes without doing anything, and its health follows Connected. No
-// message is ever delivered; feed messages to the consumer directly instead.
+// Client is a fake MQTT client with no broker: it connects and subscribes
+// without doing anything, records what it publishes, and its health follows
+// Connected. No message is ever delivered; feed messages to the consumer
+// directly instead. Safe for concurrent use.
 type Client struct {
 	Connected bool
+
+	mu        sync.Mutex
+	published []Message
+}
+
+// Message is a message published through Client, with its topic relative to
+// BaseTopic, as passed to Publish.
+type Message struct {
+	Topic   string
+	Payload string
 }
 
 // BaseTopic returns BaseTopic.
@@ -35,8 +48,20 @@ func (*Client) Disconnect() {}
 // Subscribe does nothing; no message is ever delivered.
 func (*Client) Subscribe(string, mqtt.MessageHandler) error { return nil }
 
-// Publish drops the message.
-func (*Client) Publish(string, []byte) error { return nil }
+// Publish records the message.
+func (c *Client) Publish(topic string, payload []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.published = append(c.published, Message{Topic: topic, Payload: string(payload)})
+	return nil
+}
+
+// Published returns every message published so far, in order.
+func (c *Client) Published() []Message {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.published)
+}
 
 // HealthCheck reports the connection as up when Connected is set.
 func (c *Client) HealthCheck(name string) healthcheck.HealthCheck {
