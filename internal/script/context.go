@@ -1,7 +1,9 @@
 package script
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -11,6 +13,14 @@ import (
 
 	"github.com/dop251/goja"
 )
+
+// MaxCallDepth is how deeply a script's calls may nest, counting the module
+// wrapper, handle or run, and built-ins that call back (forEach, map). It
+// leaves ample room for helper functions but stops recursion early: scripts
+// are meant to be simple, and runaway recursion would otherwise grow memory
+// until the run times out. Exceeding it fails the run; try/catch can't catch
+// it.
+const MaxCallDepth = 64
 
 // Context is the goja-side state of one compiled script: its runtime, the ctx
 // object passed to handle and job callbacks, and the jobs read from
@@ -51,17 +61,20 @@ func (ctx *Context) recoverPanic(what string, err *error) {
 
 // try runs fn, which may call into script code, and returns what the script
 // code throws as an error. Unlike Runtime.Try, it also returns an interrupt
-// (the run timing out) as an error rather than panicking: goja re-panics
-// uncatchable exceptions out of Try, and recoverPanic would report that as a
-// host bug. Any other panic propagates.
+// (the run timing out) or a stack overflow as an error rather than panicking:
+// goja re-panics these uncatchable exceptions out of Try, and recoverPanic
+// would report them as a host bug. Any other panic propagates.
 func (ctx *Context) try(fn func()) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			ie, ok := r.(*goja.InterruptedError)
-			if !ok {
+			switch ex := r.(type) {
+			case *goja.InterruptedError:
+				err = ex
+			case *goja.StackOverflowError:
+				err = ex
+			default:
 				panic(r)
 			}
-			err = ie
 		}
 	}()
 	if ex := ctx.runtime.Try(fn); ex != nil {
@@ -82,11 +95,42 @@ func (ctx *Context) run(timeout time.Duration, what string, fn func() (goja.Valu
 
 		ret, err := fn()
 		if err != nil {
-			return err
+			return describeOverflow(err)
 		}
-		return ctx.settle(ret)
+		return describeOverflow(ctx.settle(ret))
 	})
 }
+
+// describeOverflow turns a stack overflow, which goja reports with only its
+// innermost frame (possibly a built-in), into a callDepthError. Other errors
+// are returned as is.
+func describeOverflow(err error) error {
+	if so, ok := errors.AsType[*goja.StackOverflowError](err); ok {
+		return &callDepthError{overflow: so}
+	}
+	return err
+}
+
+// callDepthError is a run that exceeded MaxCallDepth. It names the innermost
+// script frame, so the author sees which function recursed.
+type callDepthError struct {
+	overflow *goja.StackOverflowError
+}
+
+func (e *callDepthError) Error() string {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "call stack exceeded %d nested calls; recursion is not supported", MaxCallDepth)
+	for _, frame := range e.overflow.Stack() {
+		if frame.SrcName() != "<native>" {
+			b.WriteString(" at ")
+			frame.Write(&b)
+			break
+		}
+	}
+	return b.String()
+}
+
+func (e *callDepthError) Unwrap() error { return e.overflow }
 
 // withTimeout runs fn, bounded by timeout (<= 0 disables it), and returns its
 // error. On timeout the runtime is interrupted with "<what> timed out after
@@ -205,6 +249,7 @@ func newContext(script *Script, z2m Z2M, mqtt MQTT) (*Context, error) {
 
 	// Must be set before any Go struct is handed to the runtime.
 	ctx.runtime.SetFieldNameMapper(goja.UncapFieldNameMapper())
+	ctx.runtime.SetMaxCallStackSize(MaxCallDepth)
 	ctx.runtime.SetPromiseRejectionTracker(ctx.trackRejection)
 
 	if err := ctx.install(); err != nil {

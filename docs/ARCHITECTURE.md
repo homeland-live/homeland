@@ -77,6 +77,8 @@ sequenceDiagram
   more than `script.MaxJobs` (20) jobs) produce a *broken handler* that runs nothing and is shown in the API and UI;
   they never stop the service.
 - `Handle` and `RunJob` on one handler are serialized by its mutex, and `HL_SCRIPTS_TIMEOUT` interrupts any run.
+  Calls nest at most `script.MaxCallDepth` (64) deep, so recursion fails the run instead of growing memory until
+  the timeout.
   `handle` and `run` may be async: goja runs every queued promise job before the call returns (there is no event
   loop), so a rejected or never-settled returned promise, or a rejection nothing handles, fails the run like a throw.
 - With `HL_SCRIPTS_WATCHER=true`, file changes are debounced per file and synced from disk. Handler changes fan out
