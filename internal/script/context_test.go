@@ -22,7 +22,7 @@ module.exports = { handle };
 `), z2m, nil, 0)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{"action": "toggle"}))
+	require.NoError(t, h.Handle(map[string]any{"action": "toggle"}, nil))
 
 	require.Len(t, z2m.publishCalls, 1)
 	assert.Equal(t, "living-room-lamp", z2m.publishCalls[0].name)
@@ -57,7 +57,7 @@ module.exports = { handle };
 `), z2m, nil, 0)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{"action": "any"}))
+	require.NoError(t, h.Handle(map[string]any{"action": "any"}, nil))
 
 	require.Len(t, z2m.publishPropCalls, 2)
 	assert.Equal(t, "living-room-lamp", z2m.publishPropCalls[0].name)
@@ -78,7 +78,7 @@ module.exports = { handle };
 `), nil, nil, 0)
 	require.NoError(t, err)
 
-	assert.Error(t, h.Handle(map[string]any{"action": "any"}))
+	assert.Error(t, h.Handle(map[string]any{"action": "any"}, nil))
 }
 
 func TestCtxMQTTPublish(t *testing.T) {
@@ -93,7 +93,7 @@ module.exports = { handle };
 `), nil, m, 0)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{"action": "brightness_step_up"}))
+	require.NoError(t, h.Handle(map[string]any{"action": "brightness_step_up"}, nil))
 
 	require.Len(t, m.calls, 1)
 	assert.Equal(t, "awtrix/settings", m.calls[0].topic)
@@ -115,7 +115,7 @@ module.exports = { handle };
 	require.NoError(t, err)
 
 	start := time.Now()
-	require.NoError(t, h.Handle(map[string]any{"action": "any"}))
+	require.NoError(t, h.Handle(map[string]any{"action": "any"}, nil))
 	assert.GreaterOrEqual(t, time.Since(start), 30*time.Millisecond)
 }
 
@@ -132,7 +132,7 @@ module.exports = { handle };
 
 	done := make(chan error, 1)
 	start := time.Now()
-	go func() { done <- h.Handle(map[string]any{"sleep": true}) }()
+	go func() { done <- h.Handle(map[string]any{"sleep": true}, nil) }()
 	select {
 	case herr := <-done:
 		require.ErrorContains(t, herr, "handler timed out after 50ms")
@@ -141,7 +141,7 @@ module.exports = { handle };
 		t.Fatal("ctx.sleep was not cut short by the timeout")
 	}
 
-	assert.NoError(t, h.Handle(map[string]any{"sleep": false}), "the timeout must not leak into the next run")
+	assert.NoError(t, h.Handle(map[string]any{"sleep": false}, nil), "the timeout must not leak into the next run")
 }
 
 func TestCtxSleepInScheduledJobIsCutShortByTimeout(t *testing.T) {
@@ -172,7 +172,7 @@ module.exports = { handle };
 	require.NoError(t, err)
 
 	start := time.Now()
-	require.NoError(t, h.Handle(map[string]any{"action": "any"}))
+	require.NoError(t, h.Handle(map[string]any{"action": "any"}, nil))
 	assert.Less(t, time.Since(start), 100*time.Millisecond)
 }
 
@@ -192,5 +192,70 @@ module.exports = { handle };
 		"linkquality": 51,
 		"device":      map[string]any{"friendlyName": "workshop-awtrix-switch"},
 	}
-	require.NoError(t, h.Handle(state))
+	require.NoError(t, h.Handle(state, nil))
+}
+
+func TestHandlePassesPrevState(t *testing.T) {
+	// handle's third argument is the prevState passed to Handle, as a plain
+	// object. The handler acts only when the previous state differs from the
+	// current one (a cheap change detector).
+	z2m := &fakeZ2M{}
+	h, err := script.Compile(newScript(`
+function handle(ctx, state, prevState) {
+    if (prevState && prevState.state !== state.state) {
+        ctx.z2m.publishProp("lamp", "changed", state.state);
+    }
+}
+module.exports = { handle };
+`), z2m, nil, 0)
+	require.NoError(t, err)
+
+	// No previous state: prevState is null, so the handler does nothing.
+	require.NoError(t, h.Handle(map[string]any{"state": "ON"}, nil))
+	require.Empty(t, z2m.publishPropCalls)
+
+	// Previous state differs from the current one: the handler publishes.
+	require.NoError(t, h.Handle(map[string]any{"state": "OFF"}, map[string]any{"state": "ON"}))
+	require.Len(t, z2m.publishPropCalls, 1)
+	assert.Equal(t, "changed", z2m.publishPropCalls[0].prop)
+	assert.Equal(t, "OFF", z2m.publishPropCalls[0].value)
+
+	// Previous state equals the current one: no publish.
+	require.NoError(t, h.Handle(map[string]any{"state": "OFF"}, map[string]any{"state": "OFF"}))
+	require.Len(t, z2m.publishPropCalls, 1, "an unchanged state must not publish")
+}
+
+func TestHandlePrevStateIsNullWithoutOne(t *testing.T) {
+	// A nil prevState, untyped or a nil prop map as the event service passes
+	// it, reaches handle as null, not undefined or an empty object.
+	z2m := &fakeZ2M{}
+	h, err := script.Compile(newScript(`
+function handle(ctx, state, prevState) {
+    ctx.z2m.publishProp("lamp", "prevIsNull", prevState === null);
+}
+module.exports = { handle };
+`), z2m, nil, 0)
+	require.NoError(t, err)
+
+	require.NoError(t, h.Handle(map[string]any{"state": "ON"}, nil))
+	require.NoError(t, h.Handle(map[string]any{"state": "ON"}, map[string]any(nil)))
+	require.Len(t, z2m.publishPropCalls, 2)
+	assert.Equal(t, true, z2m.publishPropCalls[0].value)
+	assert.Equal(t, true, z2m.publishPropCalls[1].value)
+}
+
+func TestCtxHasNoGetPrevState(t *testing.T) {
+	// The previous state is handle's third argument; ctx no longer carries it.
+	z2m := &fakeZ2M{}
+	h, err := script.Compile(newScript(`
+function handle(ctx) {
+    ctx.z2m.publishProp("lamp", "hasGetPrevState", "getPrevState" in ctx);
+}
+module.exports = { handle };
+`), z2m, nil, 0)
+	require.NoError(t, err)
+
+	require.NoError(t, h.Handle(map[string]any{}, nil))
+	require.Len(t, z2m.publishPropCalls, 1)
+	assert.Equal(t, false, z2m.publishPropCalls[0].value)
 }

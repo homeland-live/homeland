@@ -28,7 +28,7 @@ That's a complete automation: when the switch reports `on`/`off`, the lamp follo
 
 ## Why Homeland
 
-- **Automations are just JavaScript.** A script is a small module that exports `handle(ctx, state)` and/or cron jobs. No new rule language to learn.
+- **Automations are just JavaScript.** A script is a small module that exports `handle(ctx, state, prevState)` and/or cron jobs. No new rule language to learn.
 - **Runs anywhere small.** A single static binary on a scratch container. Happy on a Raspberry Pi or a mini PC next to your broker.
 - **Scripts live on disk, not in a binary.** Drop a `<device>.js` file in a mounted directory. Optionally hot-reload on change.
 - **Schedules built in.** Export `jobs` with standard cron syntax - turn things off at 22:00, nudge a device every morning.
@@ -120,8 +120,8 @@ exports (for example an unknown key or a bad cron expression) is shown as broken
 
 ### React to device events
 
-Export `handle(ctx, state)`. It runs on every state update from that device, and `state` is the device's full
-latest state (not just the changed properties).
+Export `handle(ctx, state, prevState)`. It runs on every state update from that device, and `state` is the device's
+full latest state (not just the changed properties).
 
 ```js
 // scripts/hallway-sensor.js
@@ -145,6 +145,25 @@ function handle(ctx, state) {
   const night = ctx.z2m.getState('bedroom-mode');
   if (night && night.state === 'ON') return; // do nothing at night
   ctx.z2m.publish('hallway-light', { state: 'ON', brightness: 200 });
+}
+
+module.exports = { handle };
+```
+
+### React only when something changed
+
+`prevState` is the triggering device's state just before this event, so a handler
+can compare the two and act only on a real change. After a (re)start, the
+first event's previous state is the retained state Homeland synced up with. It
+is `null` when there is no previous state, so null-check it.
+
+```js
+// scripts/bedroom-sensor.js
+function handle(ctx, state, prevState) {
+  if (prevState && prevState.occupancy && !state.occupancy) {
+    // occupancy went true -> false: the room just emptied.
+    ctx.z2m.publishProp('bedroom-thermostat', 'current_heating_setpoint', 17);
+  }
 }
 
 module.exports = { handle };

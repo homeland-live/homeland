@@ -57,7 +57,8 @@ type Service struct {
 }
 
 // run is one queued handler run: the handler resolved when the update
-// arrived, and the device it arrived for.
+// arrived and the device it arrived for. The device's state carries the
+// state it replaced (Prev), so later updates can't change what the run sees.
 type run struct {
 	handler *script.Handler
 	dev     *z2m.Device
@@ -153,7 +154,9 @@ func (svc *Service) work(runs <-chan run) {
 				return
 			default:
 			}
-			if err := r.handler.Handle(r.dev.State.Props()); err != nil {
+			// Props is nil-safe: no previous state is nil (JS null).
+			state := r.dev.State
+			if err := r.handler.Handle(state.Props(), state.Prev.Props()); err != nil {
 				slog.Error("svc/event: script error", "device", r.dev.Spec.FriendlyName, "err", err)
 			}
 		}

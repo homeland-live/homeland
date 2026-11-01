@@ -343,3 +343,101 @@ func TestRenamedDeviceKeepsState(t *testing.T) {
 	c.Handle("front-door", []byte(`{"contact":false}`))
 	assert.Equal(t, 1, *calls)
 }
+
+// transition is one update a subscriber received: the previous state's props
+// and the new state's props.
+type transition struct{ prev, next map[string]any }
+
+// newTransitionClient returns a client over contactRoster and a pointer to
+// the transitions its subscriber has received.
+func newTransitionClient(t *testing.T) (*z2m.Client, *[]transition) {
+	t.Helper()
+	c, err := z2m.NewClient(nil, z2m.WithMQTT(&mqtttest.Client{Connected: true}))
+	require.NoError(t, err)
+	got := new([]transition)
+	c.Subscribe(func(d *z2m.Device) {
+		*got = append(*got, transition{prev: d.State.Prev.Props(), next: d.State.Props()})
+	})
+	c.Handle("bridge/devices", contactRoster)
+	return c, got
+}
+
+// TestPrevStateHoldsOneLink covers the chain a stored state keeps: its Prev
+// has no Prev of its own, so states never accumulate, and the state it
+// replaced, which an earlier update's subscribers may still hold, keeps its
+// own Prev.
+func TestPrevStateHoldsOneLink(t *testing.T) {
+	c, err := z2m.NewClient(nil, z2m.WithMQTT(&mqtttest.Client{Connected: true}))
+	require.NoError(t, err)
+	var got []*z2m.Device
+	c.Subscribe(func(d *z2m.Device) { got = append(got, d) })
+	c.Handle("bridge/devices", contactRoster)
+
+	c.Handle("door", []byte(`{"contact":true}`))
+	assert.Nil(t, c.DeviceState("door").Prev, "the first state has no previous state")
+
+	c.Handle("door", []byte(`{"contact":false}`))
+	c.Handle("door", []byte(`{"contact":true}`))
+	require.Len(t, got, 2)
+
+	second, third := got[0].State, got[1].State
+	require.NotNil(t, third.Prev)
+	assert.Equal(t, second.Props(), third.Prev.Props())
+	assert.Equal(t, second.ID, third.Prev.ID)
+	assert.Nil(t, third.Prev.Prev, "a previous state has no previous state of its own")
+
+	require.NotNil(t, second.Prev, "storing a newer state leaves the replaced one untouched")
+	assert.Equal(t, map[string]any{"contact": true}, second.Prev.Props())
+}
+
+// TestUpdateCarriesPrevState covers the previous state passed to subscribers
+// for handle's prev argument: the stored state each update replaced.
+func TestUpdateCarriesPrevState(t *testing.T) {
+	c, got := newTransitionClient(t)
+
+	// The first state is the initial sync-up and doesn't propagate.
+	c.Handle("door", []byte(`{"contact":true}`))
+	require.Empty(t, *got)
+
+	c.Handle("door", []byte(`{"contact":false}`))
+	c.Handle("0x01", []byte(`{"contact":true}`))
+	assert.Equal(t, []transition{
+		{prev: map[string]any{"contact": true}, next: map[string]any{"contact": false}},
+		{prev: map[string]any{"contact": false}, next: map[string]any{"contact": true}},
+	}, *got, "by friendly name or address, each update carries the state it replaced")
+}
+
+// TestDroppedUpdateIsNotAPrevState covers states that don't propagate: they
+// are never stored, so the next update's previous state skips them.
+func TestDroppedUpdateIsNotAPrevState(t *testing.T) {
+	c, got := newTransitionClient(t)
+	c.Handle("door", []byte(`{"contact":true,"battery":90}`))
+
+	// Missing the primary "contact" prop, and a duplicate: both are dropped.
+	c.Handle("door", []byte(`{"battery":80}`))
+	c.Handle("door", []byte(`{"contact":true,"battery":90}`))
+	require.Empty(t, *got)
+
+	c.Handle("door", []byte(`{"contact":false,"battery":90}`))
+	assert.Equal(t, []transition{
+		{prev: map[string]any{"contact": true, "battery": float64(90)}, next: map[string]any{"contact": false, "battery": float64(90)}},
+	}, *got)
+}
+
+// TestRemovedDeviceKeepsNoPrevState covers a device leaving the roster and
+// coming back: its state went with it, so it syncs up again and the old
+// state is never anyone's previous state.
+func TestRemovedDeviceKeepsNoPrevState(t *testing.T) {
+	c, got := newTransitionClient(t)
+	c.Handle("door", []byte(`{"contact":true}`))
+
+	c.Handle("bridge/devices", []byte(`[]`))
+	c.Handle("bridge/devices", contactRoster)
+	c.Handle("door", []byte(`{"contact":false}`))
+	require.Empty(t, *got, "the first state after rejoining is a sync-up")
+
+	c.Handle("door", []byte(`{"contact":true}`))
+	assert.Equal(t, []transition{
+		{prev: map[string]any{"contact": false}, next: map[string]any{"contact": true}},
+	}, *got)
+}
