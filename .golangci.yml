@@ -42,3 +42,17 @@ linters:
   exclusions:
     paths:
       - ui
+
+# `golangci-lint run` reports unformatted files; `make fmt` fixes them.
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      # The module's own imports go in their own group, after third-party ones.
+      local-prefixes:
+        - github.com/homeland-live/homeland
+  exclusions:
+    paths:
+      - ui

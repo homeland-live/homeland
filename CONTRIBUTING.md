@@ -23,12 +23,13 @@ make dev                # server + UI watcher (long-running)
 Run these before opening a PR; CI runs the same:
 
 ```bash
-make ci                 # golangci-lint, go vet, go test -race, docs-check
+make ci                 # golangci-lint (with gofmt/goimports), go vet, go test -race, docs-check
+make fmt                # fix what the formatters report
 cd ui && npm run ci     # UI lint, type-check and tests
 ```
 
-`./...` also matches a Go package under `ui/node_modules`, so use `go test -race ./internal/...` to test only the
-backend.
+The make targets cover `./cmd/...` and `./internal/...`. Plain `./...` also matches a Go package under
+`ui/node_modules`, so name those paths when you run `go test` yourself.
 
 ## Conventions
 
