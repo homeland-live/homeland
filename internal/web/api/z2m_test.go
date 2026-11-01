@@ -17,6 +17,7 @@ import (
 	"github.com/homeland-live/homeland/internal/mqtt/mqtttest"
 	"github.com/homeland-live/homeland/internal/svc/event"
 	"github.com/homeland-live/homeland/internal/svc/scripts"
+	"github.com/homeland-live/homeland/internal/web"
 	"github.com/homeland-live/homeland/internal/web/api"
 	webcontext "github.com/homeland-live/homeland/internal/web/context"
 	"github.com/homeland-live/homeland/internal/z2m"
@@ -61,7 +62,7 @@ func newAppWithScripts(t *testing.T, fileNames ...string) (*fiber.App, *z2m.Clie
 		Events:  event.New(svc, client, repo),
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{ErrorHandler: web.ErrorHandler})
 	api.New(ctx).Routes(app)
 	return app, client, repo
 }
@@ -129,6 +130,21 @@ func TestListDeviceEventsByFriendlyNameOrAddress(t *testing.T) {
 			require.Len(t, body.Events, 1)
 			assert.Equal(t, "0x01", body.Events[0].IEEEAddress)
 			assert.Equal(t, 1, body.Page.Count)
+		})
+	}
+}
+
+func TestListDeviceEventsRejectsInvalidPage(t *testing.T) {
+	app, client, _ := newApp(t)
+	client.Handle("bridge/devices", lampRoster)
+
+	// A huge pagenum would overflow the offset and quietly serve page 1.
+	for _, query := range []string{"pagenum=0", "pagenum=1000001", "pagenum=922337203685477580", "pagesize=26"} {
+		t.Run(query, func(t *testing.T) {
+			resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/lamp/events?"+query, nil))
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = resp.Body.Close() })
+			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		})
 	}
 }
