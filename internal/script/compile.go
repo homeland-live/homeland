@@ -24,10 +24,10 @@ const (
 // least one job, or both (see readExports). z2m and mqtt back ctx.z2m and
 // ctx.mqtt; a nil one makes its API throw in the script.
 //
-// Script-author mistakes (a syntax error, a throw, timeout or unhandled
-// promise rejection at top level, or invalid exports, including an invalid
-// cron expression) yield a broken handler with Handler.Error set, not an
-// error. The returned error is reserved for host-side setup failures.
+// Script-author mistakes (a syntax error, a throw, timeout, call depth past
+// MaxCallDepth or unhandled promise rejection at top level, or invalid
+// exports, including an invalid cron expression) yield a broken handler with
+// Handler.Error set, not an error. The returned error is reserved for host-side setup failures.
 //
 // timeout bounds the top-level evaluation and every later Handle and RunJob
 // call; <= 0 disables it.

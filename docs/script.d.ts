@@ -44,6 +44,10 @@
 //   - HL_SCRIPTS_TIMEOUT (default 5s) bounds the top-level code, each `handle`
 //     call and each job run, including any `ctx.sleep`. A run that times out
 //     fails; at the top level that makes the script broken.
+//   - Calls may nest at most 64 deep, counting `handle` or `run` and built-ins
+//     that call back (such as `forEach` or `map`). That leaves room for
+//     helpers calling helpers, but recursion is not supported: going deeper
+//     fails the run like a timeout, and `try`/`catch` can't catch it.
 //   - A script that fails to load is reported as broken in the API and UI and
 //     runs nothing; the rest keep working. Failing to load means a syntax
 //     error, a top-level throw or timeout, or invalid exports: not an object,
