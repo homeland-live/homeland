@@ -28,8 +28,8 @@ module.exports = { handle };
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 
-	require.ErrorContains(t, h.Handle(map[string]any{"recurse": true}), "script: handle: "+overflowMsg+"f (test.js:2:")
-	assert.NoError(t, h.Handle(map[string]any{"recurse": false}))
+	require.ErrorContains(t, h.Handle(map[string]any{"recurse": true}, nil), "script: handle: "+overflowMsg+"f (test.js:2:")
+	assert.NoError(t, h.Handle(map[string]any{"recurse": false}, nil))
 }
 
 func TestRecursionThroughBuiltinFails(t *testing.T) {
@@ -42,7 +42,7 @@ module.exports = { handle() { g(); } };
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 
-	assert.ErrorContains(t, h.Handle(map[string]any{}), overflowMsg+"g (test.js:2:")
+	assert.ErrorContains(t, h.Handle(map[string]any{}, nil), overflowMsg+"g (test.js:2:")
 }
 
 func TestRecursionCannotBeCaught(t *testing.T) {
@@ -57,7 +57,7 @@ module.exports = { handle(ctx) {
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 
-	require.ErrorContains(t, h.Handle(map[string]any{}), overflowMsg)
+	require.ErrorContains(t, h.Handle(map[string]any{}, nil), overflowMsg)
 	assert.Empty(t, z2m.publishPropCalls)
 }
 
@@ -69,7 +69,7 @@ module.exports = { async handle() { await null; f(); } };
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 
-	assert.ErrorContains(t, h.Handle(map[string]any{}), overflowMsg)
+	assert.ErrorContains(t, h.Handle(map[string]any{}, nil), overflowMsg)
 }
 
 func TestRunJobFailsOnRecursion(t *testing.T) {
@@ -112,7 +112,7 @@ module.exports = { handle() { return Promise.reject({ toString: f }); } };
 `), nil, nil, time.Second)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
-	require.ErrorContains(t, h.Handle(map[string]any{}), overflowMsg)
+	require.ErrorContains(t, h.Handle(map[string]any{}, nil), overflowMsg)
 
 	assert.NotContains(t, buf.String(), "recovered panic")
 }
@@ -136,6 +136,6 @@ module.exports = { handle(ctx, state) {
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 
-	require.NoError(t, h.Handle(map[string]any{"room": "Office", "occupancy": true}))
+	require.NoError(t, h.Handle(map[string]any{"room": "Office", "occupancy": true}, nil))
 	assert.Len(t, z2m.publishCalls, 2)
 }

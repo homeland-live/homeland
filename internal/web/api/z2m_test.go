@@ -2,10 +2,12 @@ package api_test
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/gofiber/fiber/v3"
@@ -103,6 +105,41 @@ func TestListDeviceEventsDeviceWithState(t *testing.T) {
 	require.NotNil(t, body.State)
 	assert.NotEmpty(t, body.State.ID)
 	assert.Equal(t, map[string]any{"state": "ON"}, body.State.Props)
+}
+
+// TestDeviceRoutesOmitPrevState covers a device whose state has a previous
+// state: neither route serves it.
+func TestDeviceRoutesOmitPrevState(t *testing.T) {
+	app, client, _ := newApp(t)
+	client.Handle("bridge/devices", lampRoster)
+	client.Handle("lamp", []byte(`{"state":"ON"}`))
+	client.Handle("lamp", []byte(`{"state":"OFF"}`))
+	require.NotNil(t, client.DeviceState("lamp").Prev)
+
+	get := func(path string, body any) {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest(http.MethodGet, path, nil))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(body))
+	}
+
+	var events struct {
+		State map[string]json.RawMessage `json:"state"`
+	}
+	get("/api/v1/z2m/devices/lamp/events", &events)
+	assert.ElementsMatch(t, []string{"id", "createdAt", "props"}, slices.Collect(maps.Keys(events.State)))
+	assert.JSONEq(t, `{"state":"OFF"}`, string(events.State["props"]))
+
+	var devices struct {
+		Devices []struct {
+			State json.RawMessage `json:"state"`
+		} `json:"devices"`
+	}
+	get("/api/v1/z2m/bridge/devices", &devices)
+	require.Len(t, devices.Devices, 1)
+	assert.JSONEq(t, `{"state":"OFF"}`, string(devices.Devices[0].State))
 }
 
 func TestListDeviceEventsByFriendlyNameOrAddress(t *testing.T) {

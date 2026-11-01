@@ -61,7 +61,7 @@ function handle() { lost(); }`,
 			require.NoError(t, err)
 			require.NoError(t, h.Error)
 
-			err = h.Handle(map[string]any{})
+			err = h.Handle(map[string]any{}, nil)
 			if tc.err == "" {
 				assert.NoError(t, err)
 				return
@@ -84,8 +84,25 @@ module.exports = { handle };
 `), z2m, nil, time.Second)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{}))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
 	assert.Len(t, z2m.publishCalls, 1)
+}
+
+func TestHandleAsyncSeesPrevStateAfterAwait(t *testing.T) {
+	// prevState is an argument, so code after an await still reads it.
+	z2m := &fakeZ2M{}
+	h, err := script.Compile(newScript(`
+async function handle(ctx, state, prevState) {
+    await null;
+    ctx.z2m.publishProp("lamp", "prev", prevState.state);
+}
+module.exports = { handle };
+`), z2m, nil, time.Second)
+	require.NoError(t, err)
+
+	require.NoError(t, h.Handle(map[string]any{"state": "ON"}, map[string]any{"state": "OFF"}))
+	require.Len(t, z2m.publishPropCalls, 1)
+	assert.Equal(t, "OFF", z2m.publishPropCalls[0].value)
 }
 
 func TestHandleRejectionDoesNotCarryOver(t *testing.T) {
@@ -97,8 +114,8 @@ module.exports = { handle };
 `), nil, nil, time.Second)
 	require.NoError(t, err)
 
-	require.ErrorContains(t, h.Handle(map[string]any{"reject": true}), "unhandled promise rejection: Error: once")
-	assert.NoError(t, h.Handle(map[string]any{"reject": false}), "a rejection must fail only its own run")
+	require.ErrorContains(t, h.Handle(map[string]any{"reject": true}, nil), "unhandled promise rejection: Error: once")
+	assert.NoError(t, h.Handle(map[string]any{"reject": false}, nil), "a rejection must fail only its own run")
 }
 
 func TestHandleRejectionDoesNotCarryOverAfterThrow(t *testing.T) {
@@ -115,10 +132,10 @@ module.exports = { handle };
 `), nil, nil, time.Second)
 	require.NoError(t, err)
 
-	err = h.Handle(map[string]any{"fail": true})
+	err = h.Handle(map[string]any{"fail": true}, nil)
 	require.ErrorContains(t, err, "Error: thrown")
 	assert.NotContains(t, err.Error(), "dangling")
-	assert.NoError(t, h.Handle(map[string]any{"fail": false}))
+	assert.NoError(t, h.Handle(map[string]any{"fail": false}, nil))
 }
 
 func TestHandleTimesOutRunawayAsyncScript(t *testing.T) {
@@ -133,7 +150,7 @@ module.exports = { handle };
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
-	go func() { done <- h.Handle(map[string]any{}) }()
+	go func() { done <- h.Handle(map[string]any{}, nil) }()
 
 	select {
 	case err := <-done:
@@ -165,7 +182,7 @@ module.exports = { handle() { return { get x() { throw new Error("read"); } }; }
 `), nil, nil, time.Second)
 	require.NoError(t, err)
 
-	assert.NoError(t, h.Handle(map[string]any{}))
+	assert.NoError(t, h.Handle(map[string]any{}, nil))
 }
 
 func TestCompileTopLevelRejectionBreaksScript(t *testing.T) {
@@ -192,7 +209,7 @@ module.exports = { handle };
 `), nil, nil, 20*time.Millisecond)
 	require.NoError(t, err)
 
-	err = h.Handle(map[string]any{})
+	err = h.Handle(map[string]any{}, nil)
 	require.ErrorContains(t, err, "script: handle: handler timed out after 20ms")
 	assert.NotContains(t, err.Error(), "panicked")
 	assert.NotContains(t, buf.String(), "recovered panic")
