@@ -52,12 +52,13 @@ func (r *Repo) Prune(policy config.DBRetention) (int64, error) {
 			return total, fmt.Errorf("db: prune per-device cap: %w", err)
 		}
 		for _, addr := range addrs {
-			// Everything past the device's newest MaxPerDevice events, read off
-			// the (ieee_address, created_at) index.
+			// Everything past the device's newest MaxPerDevice events, in the
+			// order QueryEvents serves them, so the cap keeps what the API
+			// shows first.
 			n, err := r.deleteBatches(func(tx *gorm.DB) *gorm.DB {
 				return tx.Model(&Event{}).Select("id").
 					Where("ieee_address = ?", addr).
-					Order("created_at DESC").
+					Order("created_at DESC, rowid DESC").
 					Offset(policy.MaxPerDevice).
 					Limit(pruneBatch)
 			})

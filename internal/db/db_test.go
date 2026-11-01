@@ -137,6 +137,54 @@ func TestQueryEventsPagination(t *testing.T) {
 	assert.Equal(t, 5, p4.Count)
 }
 
+// TestQueryEventsPaginationWithEqualTimestamps covers events stored with the
+// same created_at: arrival order breaks the tie, so pages are latest first
+// and never repeat or skip an event.
+func TestQueryEventsPaginationWithEqualTimestamps(t *testing.T) {
+	s := openTemp(t)
+	at := time.Now().UTC().Add(-time.Hour)
+	for i := 1; i <= 5; i++ {
+		require.NoError(t, s.CreateEvent(eventAt(t, "lamp", fmt.Sprintf(`{"n":%d}`, i), at)))
+	}
+
+	var got []int
+	for num := 1; num <= 3; num++ {
+		page, err := s.QueryEvents("lamp", &db.Page{Num: num, Size: 2})
+		require.NoError(t, err)
+		for _, e := range page {
+			got = append(got, nFromEvent(t, e))
+		}
+	}
+	assert.Equal(t, []int{5, 4, 3, 2, 1}, got)
+}
+
+// TestEventTimesAreStoredInUTC covers a CreatedAt in another zone: it is
+// stored in UTC, so events sort by instant even though SQLite compares the
+// stored times as strings.
+func TestEventTimesAreStoredInUTC(t *testing.T) {
+	s := openTemp(t)
+	berlin := time.FixedZone("CEST", 2*60*60)
+	base := time.Now().UTC().Add(-time.Hour)
+
+	// As strings, 10:30+02:00 would sort after 09:00+00:00, though it is 30
+	// minutes earlier.
+	earlier := eventAt(t, "lamp", `{"n":1}`, base.Add(-30*time.Minute).In(berlin))
+	later := eventAt(t, "lamp", `{"n":2}`, base)
+	require.NoError(t, s.CreateEvent(earlier))
+	require.NoError(t, s.CreateEvent(later))
+	assert.Equal(t, time.UTC, earlier.CreatedAt.Location(), "stamping converts CreatedAt to UTC")
+
+	events, err := s.QueryEvents("lamp", &db.Page{Num: 1, Size: 10})
+	require.NoError(t, err)
+	require.Len(t, events, 2)
+	assert.Equal(t, []int{2, 1}, []int{nFromEvent(t, events[0]), nFromEvent(t, events[1])}, "latest first")
+
+	// Pruning compares the same strings: only the earlier event is old enough.
+	deleted, err := s.Prune(config.DBRetention{MaxAge: time.Since(base) + 15*time.Minute})
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted)
+}
+
 // TestQueryEventsRequiresArgs confirms device and page are mandatory and that
 // an out-of-range page is rejected by validation rather than silently coerced.
 func TestQueryEventsRequiresArgs(t *testing.T) {
