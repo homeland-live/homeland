@@ -3,6 +3,7 @@ package scripts_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -71,8 +72,7 @@ func TestWatcherKeepsHandlerOnAtomicSave(t *testing.T) {
 	dir, svc, rec := startWatching(t)
 	path := filepath.Join(dir, "lamp.js")
 	require.NoError(t, os.WriteFile(path, []byte(`module.exports = { handle(ctx, state) { var v = 1; } };`), 0o600))
-	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) != nil },
-		2*time.Second, 10*time.Millisecond)
+	rec.waitFor(t, "+lamp")
 
 	// Write a temp file, then rename it over the script, as many editors do.
 	const updated = `module.exports = { handle(ctx, state) { var v = 2; } };`
@@ -89,12 +89,11 @@ func TestWatcherDropsRemovedScript(t *testing.T) {
 	dir, svc, rec := startWatching(t)
 	path := filepath.Join(dir, "lamp.js")
 	require.NoError(t, os.WriteFile(path, []byte(`module.exports = { handle(ctx, state) {} };`), 0o600))
-	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) != nil },
-		2*time.Second, 10*time.Millisecond)
+	rec.waitFor(t, "+lamp")
 
 	require.NoError(t, os.Remove(path))
-	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) == nil },
-		2*time.Second, 10*time.Millisecond)
+	rec.waitFor(t, "-lamp")
+	assert.Nil(t, svc.Handler(named("lamp")))
 	assert.Equal(t, 1, countOf(rec.snapshot(), "-lamp"), "the removal is notified once")
 }
 
@@ -105,10 +104,11 @@ func TestWatcherIgnoresHiddenAndOtherFiles(t *testing.T) {
 	// A real script afterwards proves the watcher was running all along.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "lamp.js"), []byte(`module.exports = { handle(ctx, state) {} };`), 0o600))
 
-	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) != nil },
-		2*time.Second, 10*time.Millisecond)
+	rec.waitFor(t, "+lamp")
 	assert.Nil(t, svc.Handler(named(".#lamp")))
-	assert.Equal(t, []string{"+lamp"}, rec.snapshot())
+	// Compacted: a stalled writer can split lamp.js's events into two
+	// bursts, which correctly syncs it twice.
+	assert.Equal(t, []string{"+lamp"}, slices.Compact(rec.snapshot()), "only lamp.js is synced")
 }
 
 func countOf(changes []string, change string) int {
