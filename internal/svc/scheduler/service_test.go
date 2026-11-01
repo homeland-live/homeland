@@ -46,7 +46,7 @@ func (r *recordingZ2M) calls() []string {
 func scheduledHandler(t *testing.T, z2m script.Z2M, cron, marker string) *script.Handler {
 	t.Helper()
 	src := `function mark(ctx) { ctx.z2m.publishProp("` + marker + `", "ran", true); }
-module.exports = { handle(state, ctx) {}, jobs: [{ cron: "` + cron + `", run: mark }] };`
+module.exports = { handle(ctx, state) {}, jobs: [{ cron: "` + cron + `", run: mark }] };`
 	h, err := script.Compile(&script.Script{FileName: marker + ".js", Content: src}, z2m, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
@@ -162,7 +162,7 @@ func TestSyncRemovesDeviceJobs(t *testing.T) {
 }
 
 func TestSyncHandlerWithoutScheduleRegistersNothing(t *testing.T) {
-	src := `module.exports = { handle(state, ctx) {} };`
+	src := `module.exports = { handle(ctx, state) {} };`
 	h, err := script.Compile(&script.Script{FileName: "quiet.js", Content: src}, nil, nil, 0)
 	require.NoError(t, err)
 

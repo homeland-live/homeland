@@ -8,7 +8,7 @@ single binary (or container) that sits next to your broker and does one thing we
 
 ```js
 // scripts/livingroom-lamp-switch.js
-function handle(state, ctx) {
+function handle(ctx, state) {
   switch (state.action) {
     case 'on':
       ctx.z2m.publishProp('livingroom-lamp', 'state', 'ON');
@@ -28,7 +28,7 @@ That's a complete automation: when the switch reports `on`/`off`, the lamp follo
 
 ## Why Homeland
 
-- **Automations are just JavaScript.** A script is a small module that exports `handle(state, ctx)` and/or cron jobs. No new rule language to learn.
+- **Automations are just JavaScript.** A script is a small module that exports `handle(ctx, state)` and/or cron jobs. No new rule language to learn.
 - **Runs anywhere small.** A single static binary on a scratch container. Happy on a Raspberry Pi or a mini PC next to your broker.
 - **Scripts live on disk, not in a binary.** Drop a `<device>.js` file in a mounted directory. Optionally hot-reload on change.
 - **Schedules built in.** Export `jobs` with standard cron syntax - turn things off at 22:00, nudge a device every morning.
@@ -120,12 +120,12 @@ exports (for example an unknown key or a bad cron expression) is shown as broken
 
 ### React to device events
 
-Export `handle(state, ctx)`. It runs on every state update from that device, and `state` is the device's full
+Export `handle(ctx, state)`. It runs on every state update from that device, and `state` is the device's full
 latest state (not just the changed properties).
 
 ```js
 // scripts/hallway-sensor.js
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (state.occupancy) {
     ctx.z2m.publishProp('hallway-light', 'state', 'ON');
   } else {
@@ -141,7 +141,7 @@ module.exports = { handle };
 A handler can read the latest state of any other device:
 
 ```js
-function handle(state, ctx) {
+function handle(ctx, state) {
   const night = ctx.z2m.getState('bedroom-mode');
   if (night && night.state === 'ON') return; // do nothing at night
   ctx.z2m.publish('hallway-light', { state: 'ON', brightness: 200 });

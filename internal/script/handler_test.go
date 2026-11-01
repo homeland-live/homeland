@@ -16,7 +16,7 @@ import (
 func TestHandleRunsAndLogs(t *testing.T) {
 	buf := slogtest.Capture(t, slog.LevelInfo)
 	h, err := script.Compile(&script.Script{FileName: "switch.js", Content: `
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.log("event for", state.device.friendlyName, "action=", state.action, state.linkquality,
         state.device, [1, "a"], null, undefined, true);
 }
@@ -41,7 +41,7 @@ module.exports = { handle };
 func TestLogRespectsLevel(t *testing.T) {
 	// ctx.log is Info, so it is dropped when LOG_LEVEL is warn or higher.
 	buf := slogtest.Capture(t, slog.LevelWarn)
-	h, err := script.Compile(newScript(`module.exports = { handle(state, ctx) { ctx.log("hidden"); } };`), nil, nil, 0)
+	h, err := script.Compile(newScript(`module.exports = { handle(ctx, state) { ctx.log("hidden"); } };`), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Handle(map[string]any{}))
 	assert.Empty(t, buf.String())
@@ -53,7 +53,7 @@ func TestHandleTimesOutRunawayScript(t *testing.T) {
 	// returns the interrupt as an error, and must return promptly - well before
 	// the test's own deadline.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     while (true) {}
 }
 module.exports = { handle };
@@ -75,7 +75,7 @@ func TestHandleRecoversAfterRepeatedTimeouts(t *testing.T) {
 	// Each run that times out must leave the runtime clean, even when the
 	// timer fires right as a run ends, so fast runs in between always pass.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     if (state.spin) { while (true) {} }
 }
 module.exports = { handle };
@@ -94,7 +94,7 @@ func TestHandleWatchdogDoesNotInterruptFastScript(t *testing.T) {
 	// leak into a later call.
 	z2m := &fakeZ2M{}
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.z2m.publishProp("lamp", "state", "ON");
 }
 module.exports = { handle };
@@ -112,7 +112,7 @@ func TestHandleKeepsModuleStateBetweenCalls(t *testing.T) {
 	z2m := &fakeZ2M{}
 	h, err := script.Compile(newScript(`
 let presses = 0;
-function handle(state, ctx) {
+function handle(ctx, state) {
     presses++;
     ctx.z2m.publishProp("counter", "presses", presses);
 }
@@ -131,7 +131,7 @@ func TestBrokenHandlerRunJobReturnsCompileError(t *testing.T) {
 	// returns the recorded compile error. It never collected jobs, so a
 	// hand-built ScheduledJob stands in for one the scheduler might still hold:
 	// RunJob must refuse it and surface the compile error, not the callback.
-	h, err := script.Compile(newScript(`function handle(state, ctx) {`), nil, nil, 0)
+	h, err := script.Compile(newScript(`function handle(ctx, state) {`), nil, nil, 0)
 	require.NoError(t, err)
 	require.Error(t, h.Error)
 	assert.Empty(t, h.Jobs(), "a broken handler collects no jobs")
@@ -144,7 +144,7 @@ func TestMarshalJSONSurfacesError(t *testing.T) {
 	// The API serializes a handler so the UI can see, for a broken handler, why
 	// it failed. A broken handler's Error is a *httputil.Err, so it marshals to
 	// the same {code,msg} shape the rest of the API uses for errors.
-	h, err := script.Compile(newScript(`function handle(state, ctx) {`), nil, nil, 0)
+	h, err := script.Compile(newScript(`function handle(ctx, state) {`), nil, nil, 0)
 	require.NoError(t, err)
 	require.Error(t, h.Error)
 
@@ -164,7 +164,7 @@ func TestMarshalJSONSurfacesError(t *testing.T) {
 func TestMarshalJSONOmitsErrorWhenHealthy(t *testing.T) {
 	// A handler that compiled cleanly carries no error, so the "error" field is
 	// omitted (omitempty) rather than serialized as an empty object.
-	h, err := script.Compile(newScript(`module.exports = { handle(state, ctx) {} };`), nil, nil, 0)
+	h, err := script.Compile(newScript(`module.exports = { handle(ctx, state) {} };`), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 
@@ -197,7 +197,7 @@ func TestMarshalJSONReportsHandleAndJobCount(t *testing.T) {
 	// A script that exports a handle function and jobs reports both, so the UI
 	// can show the handler and the schedule indicators together.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {}
+function handle(ctx, state) {}
 function noop(ctx) {}
 module.exports = {
     handle,
@@ -230,7 +230,7 @@ func TestMarshalJSONReportsJobsOnlyScript(t *testing.T) {
 func TestMarshalJSONBrokenHandlerReportsNeither(t *testing.T) {
 	// A broken handler runs nothing: both hasHandle and jobCount are zero and
 	// only the error is reported, so the UI shows just the error indicator.
-	h, err := script.Compile(newScript(`function handle(state, ctx) {`), nil, nil, 0)
+	h, err := script.Compile(newScript(`function handle(ctx, state) {`), nil, nil, 0)
 	require.NoError(t, err)
 	require.Error(t, h.Error)
 
@@ -251,7 +251,7 @@ func TestHandleRecoversGoPanic(t *testing.T) {
 	// crash the process, and the handler must keep working afterwards.
 	slogtest.Capture(t, slog.LevelError)
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     if (state.publish) ctx.z2m.publish("lamp", { state: "ON" });
 }
 module.exports = { handle };

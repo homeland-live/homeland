@@ -56,10 +56,10 @@ files, not this document (see [Regenerating](#regenerating)).
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (state.occupancy) {
     ctx.z2m.publish('bathroom-light', { state: 'ON', brightness: 200 });
   } else {
@@ -96,10 +96,10 @@ module.exports = /** @satisfies {ScriptModule} */ ({
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   switch (state.action) {
     case 'on':
       ctx.z2m.publishProp('bedroom-lamp', 'state', 'ON');
@@ -139,10 +139,10 @@ module.exports = /** @satisfies {ScriptModule} */ ({ handle });
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (state.contact === false) {
     // contact:false means the door is open.
     ctx.mqtt.publish('awtrix/notify', { text: 'Front door opened', color: '#ff0000' });
@@ -167,15 +167,15 @@ module.exports = /** @satisfies {ScriptModule} */ ({ handle });
  * separate light device by name. This is the simplest shape: one device
  * reacts, another is commanded.
  *
- * `handle(state, ctx)` receives the device's full latest state, not just the
+ * `handle(ctx, state)` receives the device's full latest state, not just the
  * changed properties, so it can read whatever the device reports.
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (state.occupancy) {
     ctx.z2m.publishProp('hallway-light', 'state', 'ON');
   } else {
@@ -203,10 +203,10 @@ module.exports = /** @satisfies {ScriptModule} */ ({ handle });
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (!state.occupancy) {
     ctx.z2m.publishProp('kitchen-light', 'state', 'OFF');
     return;

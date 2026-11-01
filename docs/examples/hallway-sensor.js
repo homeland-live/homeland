@@ -8,15 +8,15 @@
  * separate light device by name. This is the simplest shape: one device
  * reacts, another is commanded.
  *
- * `handle(state, ctx)` receives the device's full latest state, not just the
+ * `handle(ctx, state)` receives the device's full latest state, not just the
  * changed properties, so it can read whatever the device reports.
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (state.occupancy) {
     ctx.z2m.publishProp('hallway-light', 'state', 'ON');
   } else {

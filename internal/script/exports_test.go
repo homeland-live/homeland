@@ -17,7 +17,7 @@ func TestExportsHandleAndJobs(t *testing.T) {
 	// The documented shape: named functions, exported by reference.
 	z2m := &fakeZ2M{}
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {}
+function handle(ctx, state) {}
 
 function turnOffLamp(ctx) {
     ctx.z2m.publishProp("living-room-lamp", "state", "OFF");
@@ -47,7 +47,7 @@ module.exports = {
 
 func TestExportsViaExportsObject(t *testing.T) {
 	// Setting properties on the exports object works like CommonJS.
-	h, err := script.Compile(newScript(`exports.handle = function (state, ctx) {};`), nil, nil, 0)
+	h, err := script.Compile(newScript(`exports.handle = function (ctx, state) {};`), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 	assert.True(t, h.HasHandle)
@@ -56,7 +56,7 @@ func TestExportsViaExportsObject(t *testing.T) {
 func TestReassigningExportsVariableExportsNothing(t *testing.T) {
 	// The classic CommonJS mistake: rebinding the local exports variable
 	// doesn't change module.exports, so nothing is exported.
-	h, err := script.Compile(newScript(`exports = { handle(state, ctx) {} };`), nil, nil, 0)
+	h, err := script.Compile(newScript(`exports = { handle(ctx, state) {} };`), nil, nil, 0)
 	require.NoError(t, err)
 	assert.ErrorContains(t, h.Error, "must export a handle function, at least one job, or both")
 }
@@ -65,7 +65,7 @@ func TestExportsAreReadOnce(t *testing.T) {
 	// Changing module.exports after load has no effect: the host read it once.
 	z2m := &fakeZ2M{}
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     module.exports.handle = function () { ctx.z2m.publishProp("replaced", "ran", true); };
     module.exports.jobs = [{ cron: "* * * * *", run() {} }];
     ctx.z2m.publishProp("original", "ran", true);
@@ -86,7 +86,7 @@ func TestModuleDefinesNoGlobals(t *testing.T) {
 	// assignment throw instead of creating a global.
 	h, err := script.Compile(newScript(`
 var counter = 0;
-module.exports = { handle(state, ctx) { leaked = 1; } };
+module.exports = { handle(ctx, state) { leaked = 1; } };
 `), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)

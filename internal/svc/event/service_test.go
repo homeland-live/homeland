@@ -44,7 +44,7 @@ func (r *recordingZ2M) recorded() []string {
 // test can observe that this specific handler (and not another) ran.
 func markerHandler(t *testing.T, z2m script.Z2M, marker string) *script.Handler {
 	t.Helper()
-	src := `module.exports = { handle(state, ctx) { ctx.z2m.publishProp("` + marker + `", "ran", true); } };`
+	src := `module.exports = { handle(ctx, state) { ctx.z2m.publishProp("` + marker + `", "ran", true); } };`
 	h, err := script.Compile(&script.Script{FileName: marker + ".js", Content: src}, z2m, nil, 0)
 	require.NoError(t, err)
 	return h
@@ -244,7 +244,7 @@ func TestDevicesRunInParallel(t *testing.T) {
 func TestDeviceRunsInArrivalOrder(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		z2mRec := &recordingZ2M{}
-		src := `module.exports = { handle(state, ctx) { ctx.z2m.publishProp("lamp", String(state.n), true); } };`
+		src := `module.exports = { handle(ctx, state) { ctx.z2m.publishProp("lamp", String(state.n), true); } };`
 		h, err := script.Compile(&script.Script{FileName: "lamp.js", Content: src}, z2mRec, nil, 0)
 		require.NoError(t, err)
 		svc, deliver := serviceWith(t, handlerMap{"lamp": h})

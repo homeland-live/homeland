@@ -10,10 +10,10 @@
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (!state.occupancy) {
     ctx.z2m.publishProp('kitchen-light', 'state', 'OFF');
     return;

@@ -14,7 +14,7 @@ func TestScriptWithoutExportsYieldsBrokenHandler(t *testing.T) {
 	// A script that exports neither a handle function nor a job is a
 	// script-author error, not a host error: Compile returns a broken handler
 	// that records the problem on Error and refuses to run.
-	h, err := script.Compile(newScript(`function handle(state, ctx) {}`), nil, nil, 0)
+	h, err := script.Compile(newScript(`function handle(ctx, state) {}`), nil, nil, 0)
 	require.NoError(t, err, "missing exports must not be a Compile error")
 	require.NotNil(t, h)
 	require.ErrorContains(t, h.Error, "must export a handle function, at least one job, or both")
@@ -24,7 +24,7 @@ func TestScriptWithoutExportsYieldsBrokenHandler(t *testing.T) {
 func TestSyntaxErrorYieldsBrokenHandler(t *testing.T) {
 	// A JS syntax error is likewise recorded on the handler rather than
 	// returned, so loading the rest of the scripts is not aborted.
-	h, err := script.Compile(newScript(`function handle(state, ctx) {`), nil, nil, 0)
+	h, err := script.Compile(newScript(`function handle(ctx, state) {`), nil, nil, 0)
 	require.NoError(t, err, "syntax error must not be a Compile error")
 	require.NotNil(t, h)
 	require.Error(t, h.Error, "broken handler must record the compile error")
@@ -33,7 +33,7 @@ func TestSyntaxErrorYieldsBrokenHandler(t *testing.T) {
 
 func TestErrorsReportScriptLineNumbers(t *testing.T) {
 	// The module wrapper adds no lines, so positions match the script file.
-	h, err := script.Compile(newScript("module.exports = {\n  handle(state, ctx) {\n    missing();\n  },\n};"), nil, nil, 0)
+	h, err := script.Compile(newScript("module.exports = {\n  handle(ctx, state) {\n    missing();\n  },\n};"), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 	require.ErrorContains(t, h.Handle(map[string]any{}), "test.js:3:")
