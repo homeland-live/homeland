@@ -12,7 +12,7 @@
 // `module.exports` to `{ handle, jobs }`, with a `handle` function, at least
 // one job, or both:
 //
-//     function handle(state, ctx) { ... }
+//     function handle(ctx, state) { ... }
 //
 //     function turnOffLamp(ctx) { ... }
 //
@@ -73,10 +73,10 @@
 // functions written inline. Annotate named functions with JSDoc:
 //
 //     /**
-//      * @param {DeviceState} state
 //      * @param {HandlerContext} ctx
+//      * @param {DeviceState} state
 //      */
-//     function handle(state, ctx) { ... }
+//     function handle(ctx, state) { ... }
 //
 //     /** @param {HandlerContext} ctx */
 //     function turnOffLamp(ctx) { ... }
@@ -158,7 +158,7 @@ interface MQTT {
 }
 
 /**
- * A device's full latest state (not just the changed properties): the first
+ * A device's full latest state (not just the changed properties): the second
  * argument to `handle`, and what `ctx.z2m.getState` returns.
  *
  * A plain object keyed by property name, decoded from the state Zigbee2MQTT
@@ -186,8 +186,8 @@ interface DeviceState {
 }
 
 /**
- * Host context passed to `handle` as its second argument and to every job's
- * `run`.
+ * Host context passed to `handle` and to every job's `run`, always as the first
+ * argument.
  */
 interface HandlerContext {
   /**
@@ -242,10 +242,10 @@ interface HandlerContext {
  *
  * It may be async (see the runtime model above).
  *
- * @param state The device's full latest state.
  * @param ctx   Host APIs: log, sleep, z2m and mqtt.
+ * @param state The device's full latest state.
  */
-type Handle = (state: DeviceState, ctx: HandlerContext) => void | Promise<void>;
+type Handle = (ctx: HandlerContext, state: DeviceState) => void | Promise<void>;
 
 /**
  * A cron-scheduled job. `run` is called at every tick of `cron`,

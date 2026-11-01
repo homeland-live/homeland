@@ -107,7 +107,7 @@ var lamp = &z2m.DeviceSpec{IEEEAddress: "0x01", FriendlyName: "lamp"}
 // compiled returns a working handler compiled from fileName.
 func compiled(t *testing.T, fileName string) *script.Handler {
 	t.Helper()
-	h, err := script.Compile(script.NewScript(fileName, `module.exports = { handle(state, ctx) {} };`), nil, nil, 0)
+	h, err := script.Compile(script.NewScript(fileName, `module.exports = { handle(ctx, state) {} };`), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 	return h
@@ -136,7 +136,7 @@ func withHandlers(z scripts.Z2M, handlers map[string]*script.Handler) *scripts.S
 func writeScripts(t *testing.T, dir string, names ...string) {
 	t.Helper()
 	for _, name := range names {
-		src := []byte(`module.exports = { handle(state, ctx) {} };`)
+		src := []byte(`module.exports = { handle(ctx, state) {} };`)
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), src, 0o600))
 	}
 }

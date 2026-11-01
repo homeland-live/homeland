@@ -47,7 +47,7 @@ func newAppWithScripts(t *testing.T, fileNames ...string) (*fiber.App, *z2m.Clie
 
 	dir := t.TempDir()
 	for _, name := range fileNames {
-		src := []byte(`module.exports = { handle(state, ctx) {} };`)
+		src := []byte(`module.exports = { handle(ctx, state) {} };`)
 		require.NoError(t, os.WriteFile(filepath.Join(dir, name), src, 0o600))
 	}
 	svc := scripts.New(&config.Config{Scripts: &config.Scripts{Dir: dir}}, client)

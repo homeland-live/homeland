@@ -8,10 +8,10 @@
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   switch (state.action) {
     case 'on':
       ctx.z2m.publishProp('livingroom-lamp', 'state', 'ON');

@@ -14,7 +14,7 @@ import (
 func TestCtxZ2MPublish(t *testing.T) {
 	z2m := &fakeZ2M{}
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.z2m.publish("living-room-lamp", {state: "ON", brightness: 200});
     ctx.z2m.publishProp("living-room-lamp", "state", "OFF");
 }
@@ -44,7 +44,7 @@ func TestCtxZ2MGetState(t *testing.T) {
 	// The handler reads another device's state and acts on it, then probes an
 	// unknown device to confirm z2m.getState returns null for a miss.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     var motion = ctx.z2m.getState("hallway-sensor");
     if (motion && motion.occupancy) {
         ctx.z2m.publishProp("living-room-lamp", "state", "ON");
@@ -71,7 +71,7 @@ module.exports = { handle };
 func TestCtxZ2MGetStateUnavailableThrows(t *testing.T) {
 	// With a nil z2m, ctx.z2m.getState must throw rather than silently return.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.z2m.getState("anything");
 }
 module.exports = { handle };
@@ -84,7 +84,7 @@ module.exports = { handle };
 func TestCtxMQTTPublish(t *testing.T) {
 	m := &fakeMQTT{}
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     if (state.action === "brightness_step_up") {
         ctx.mqtt.publish("awtrix/settings", {MATP: true});
     }
@@ -107,7 +107,7 @@ func TestCtxSleep(t *testing.T) {
 	// sleeps a short, measurable interval; Handle must not return before it
 	// elapses.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.sleep(30);
 }
 module.exports = { handle };
@@ -123,7 +123,7 @@ func TestCtxSleepIsCutShortByTimeout(t *testing.T) {
 	// A sleep longer than the timeout must not outlive it: the run fails with
 	// the timeout, and the next run is unaffected.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     if (state.sleep) ctx.sleep(60000);
 }
 module.exports = { handle };
@@ -163,7 +163,7 @@ func TestCtxSleepInScheduledJobIsCutShortByTimeout(t *testing.T) {
 func TestCtxSleepNonPositiveReturnsImmediately(t *testing.T) {
 	// A non-positive argument is a no-op: the handler returns without blocking.
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.sleep(0);
     ctx.sleep(-100);
 }
@@ -178,7 +178,7 @@ module.exports = { handle };
 
 func TestJSONStringifyAvailable(t *testing.T) {
 	h, err := script.Compile(newScript(`
-function handle(state, ctx) {
+function handle(ctx, state) {
     ctx.log("state json:", JSON.stringify(state));
     var round = JSON.parse(JSON.stringify(state));
     ctx.log("action again:", round.action);

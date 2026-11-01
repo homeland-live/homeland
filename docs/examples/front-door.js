@@ -11,10 +11,10 @@
  */
 
 /**
- * @param {DeviceState} state
  * @param {HandlerContext} ctx
+ * @param {DeviceState} state
  */
-function handle(state, ctx) {
+function handle(ctx, state) {
   if (state.contact === false) {
     // contact:false means the door is open.
     ctx.mqtt.publish('awtrix/notify', { text: 'Front door opened', color: '#ff0000' });

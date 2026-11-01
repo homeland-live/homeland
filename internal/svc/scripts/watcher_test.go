@@ -46,13 +46,13 @@ func content(svc *scripts.Service, name string) string {
 func TestWatcherDebouncesPartialWrites(t *testing.T) {
 	dir, svc, rec := startWatching(t)
 	path := filepath.Join(dir, "lamp.js")
-	const src = `module.exports = { handle(state, ctx) {} };`
+	const src = `module.exports = { handle(ctx, state) {} };`
 
 	// An editor that truncates, then writes in pieces: each step on its own
 	// is a broken (or empty) script.
 	start := time.Now()
 	require.NoError(t, os.WriteFile(path, nil, 0o600))
-	require.NoError(t, os.WriteFile(path, []byte(`function handle(state, ctx) {`), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte(`function handle(ctx, state) {`), 0o600))
 	require.NoError(t, os.WriteFile(path, []byte(src), 0o600))
 	// No sync can start before start+WatchDebounce, so the guarantee only
 	// holds for a save that finishes within one debounce window. A writer
@@ -70,12 +70,12 @@ func TestWatcherDebouncesPartialWrites(t *testing.T) {
 func TestWatcherKeepsHandlerOnAtomicSave(t *testing.T) {
 	dir, svc, rec := startWatching(t)
 	path := filepath.Join(dir, "lamp.js")
-	require.NoError(t, os.WriteFile(path, []byte(`module.exports = { handle(state, ctx) { var v = 1; } };`), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte(`module.exports = { handle(ctx, state) { var v = 1; } };`), 0o600))
 	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) != nil },
 		2*time.Second, 10*time.Millisecond)
 
 	// Write a temp file, then rename it over the script, as many editors do.
-	const updated = `module.exports = { handle(state, ctx) { var v = 2; } };`
+	const updated = `module.exports = { handle(ctx, state) { var v = 2; } };`
 	tmp := filepath.Join(dir, "lamp.js.tmp")
 	require.NoError(t, os.WriteFile(tmp, []byte(updated), 0o600))
 	require.NoError(t, os.Rename(tmp, path))
@@ -88,7 +88,7 @@ func TestWatcherKeepsHandlerOnAtomicSave(t *testing.T) {
 func TestWatcherDropsRemovedScript(t *testing.T) {
 	dir, svc, rec := startWatching(t)
 	path := filepath.Join(dir, "lamp.js")
-	require.NoError(t, os.WriteFile(path, []byte(`module.exports = { handle(state, ctx) {} };`), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte(`module.exports = { handle(ctx, state) {} };`), 0o600))
 	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) != nil },
 		2*time.Second, 10*time.Millisecond)
 
@@ -103,7 +103,7 @@ func TestWatcherIgnoresHiddenAndOtherFiles(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".#lamp.js"), []byte(`lock`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte(`hi`), 0o600))
 	// A real script afterwards proves the watcher was running all along.
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "lamp.js"), []byte(`module.exports = { handle(state, ctx) {} };`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "lamp.js"), []byte(`module.exports = { handle(ctx, state) {} };`), 0o600))
 
 	require.Eventually(t, func() bool { return svc.Handler(named("lamp")) != nil },
 		2*time.Second, 10*time.Millisecond)

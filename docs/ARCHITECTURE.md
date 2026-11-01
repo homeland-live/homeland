@@ -45,7 +45,7 @@ sequenceDiagram
     Z->>E: subscriber call (only if the update propagates)
     E->>D: EnqueueEvent (async, batched)
     E->>W: queue handler run (non-blocking)
-    W->>W: Handler.Handle(state, ctx)
+    W->>W: Handler.Handle: handle(ctx, state)
 ```
 
 1. **Filtering** (`z2m`). The client subscribes to `#` under the base topic. The base topic itself, bridge topics it

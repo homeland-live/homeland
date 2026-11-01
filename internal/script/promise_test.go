@@ -76,7 +76,7 @@ func TestHandleAsyncSuccessRunsToCompletion(t *testing.T) {
 	// by then.
 	z2m := &fakeZ2M{}
 	h, err := script.Compile(newScript(`
-async function handle(state, ctx) {
+async function handle(ctx, state) {
     await null;
     ctx.z2m.publish("lamp", { state: "ON" });
 }
@@ -90,7 +90,7 @@ module.exports = { handle };
 
 func TestHandleRejectionDoesNotCarryOver(t *testing.T) {
 	h, err := script.Compile(newScript(`
-function handle(state) {
+function handle(ctx, state) {
     if (state.reject) Promise.reject(new Error("once"));
 }
 module.exports = { handle };
@@ -105,7 +105,7 @@ func TestHandleRejectionDoesNotCarryOverAfterThrow(t *testing.T) {
 	// A run that throws is reported by its throw; the rejection it left must
 	// not surface in the next run either.
 	h, err := script.Compile(newScript(`
-function handle(state) {
+function handle(ctx, state) {
     if (state.fail) {
         Promise.reject(new Error("dangling"));
         throw new Error("thrown");

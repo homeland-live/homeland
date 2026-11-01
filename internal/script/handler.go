@@ -45,7 +45,7 @@ func (h *Handler) Script() *Script {
 	return h.script
 }
 
-// Handle runs handle(state, ctx) with state converted to a JS value. It
+// Handle runs handle(ctx, state) with state converted to a JS value. It
 // returns Error for a broken handler and is a no-op for a nil handler or a
 // script without a handle function. A call that outruns the timeout is
 // interrupted and returns an error, and so does a Go panic raised during the
@@ -67,7 +67,7 @@ func (h *Handler) Handle(state any) error {
 	defer h.mu.Unlock()
 
 	err := h.ctx.run(h.timeout, "handler", func() (goja.Value, error) {
-		return h.handle(goja.Undefined(), h.ctx.runtime.ToValue(state), h.ctx.ctxArg)
+		return h.handle(goja.Undefined(), h.ctx.ctxArg, h.ctx.runtime.ToValue(state))
 	})
 	if err != nil {
 		return fmt.Errorf("script: handle: %w", err)
