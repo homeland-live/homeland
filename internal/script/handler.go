@@ -49,14 +49,15 @@ func (h *Handler) Script() *Script {
 	return h.script
 }
 
-// Handle runs handle(ctx, state) with state converted to a JS value. It
-// returns Error for a broken handler and is a no-op for a nil handler or a
-// script without a handle function. A call that outruns the timeout is
-// interrupted and returns an error, and so does a Go panic raised during the
-// call. An async handle fails like a throwing one: the call returns an error
-// when its promise rejects or never settles, and when any promise the call
-// rejected is left without a handler.
-func (h *Handler) Handle(state any) error {
+// Handle runs handle(ctx, state, prevState) with state and prevState converted
+// to JS values; prevState is the device's state before this one, nil (JS null)
+// when there is none. It returns Error for a broken handler and is a no-op for
+// a nil handler or a script without a handle function. A call that outruns the
+// timeout is interrupted and returns an error, and so does a Go panic raised
+// during the call. An async handle fails like a throwing one: the call returns
+// an error when its promise rejects or never settles, and when any promise the
+// call rejected is left without a handler.
+func (h *Handler) Handle(state, prevState any) error {
 	if h == nil {
 		return nil
 	}
@@ -71,7 +72,12 @@ func (h *Handler) Handle(state any) error {
 	defer h.mu.Unlock()
 
 	err := h.ctx.run(h.timeout, "handler", func() (goja.Value, error) {
-		return h.handle(goja.Undefined(), h.ctx.ctxArg, h.ctx.runtime.ToValue(state))
+		return h.handle(
+			goja.Undefined(),
+			h.ctx.ctxArg,
+			h.ctx.runtime.ToValue(state),
+			h.ctx.runtime.ToValue(prevState),
+		)
 	})
 	if err != nil {
 		return fmt.Errorf("script: handle: %w", err)

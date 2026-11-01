@@ -35,8 +35,9 @@ interface Indicator {
 // reports for the device:
 // - a compile error shows a single red warning triangle: neither the handler
 //   nor its scheduled jobs run, so no other indicator applies;
-// - an exported handle(ctx, state) function shows a lightning (green/filled
-//   when the device has reported state, a plain outline otherwise);
+// - an exported handle(ctx, state, prevState) function shows a lightning
+//   (green/filled when the device has reported state, a plain outline
+//   otherwise);
 // - exported jobs show a clock.
 // A script may export both a handle function and jobs, so both indicators can
 // appear together. A device with no script shows nothing.

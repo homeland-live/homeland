@@ -213,6 +213,22 @@ func TestNewDeviceState(t *testing.T) {
 	})
 }
 
+// TestDeviceStateJSONOmitsPrev verifies a state marshals to its ID and
+// CreatedAt only: neither Raw nor Prev is ever serialized.
+func TestDeviceStateJSONOmitsPrev(t *testing.T) {
+	createdAt := time.Date(2026, 11, 7, 10, 0, 0, 0, time.UTC)
+	s := &z2m.DeviceState{
+		ID:        "next",
+		CreatedAt: createdAt,
+		Raw:       map[string]json.RawMessage{"state": json.RawMessage(`"ON"`)},
+		Prev:      &z2m.DeviceState{ID: "prev", CreatedAt: createdAt},
+	}
+
+	got, err := json.Marshal(s)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"id":"next","createdAt":"2026-11-07T10:00:00Z"}`, string(got))
+}
+
 // TestDeviceStateLogValue verifies a state logs as a group of its decoded
 // props, sorted by name, and that a nil state logs as nothing.
 func TestDeviceStateLogValue(t *testing.T) {

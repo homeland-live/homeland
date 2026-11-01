@@ -222,10 +222,10 @@ func (ctx *Context) sleep(call goja.FunctionCall) goja.Value {
 	return goja.Undefined()
 }
 
-// install builds the ctx object (log, sleep, z2m, mqtt) passed to handle and
-// job callbacks. Nothing is installed as a global. The SDK structs' exported
-// methods are bound by goja and lower-cased by the runtime's field-name
-// mapper; a returned Go error is thrown as a JS exception.
+// install builds the ctx object (log, sleep, z2m, mqtt) passed
+// to handle and job callbacks. Nothing is installed as a global. The SDK
+// structs' exported methods are bound by goja and lower-cased by the runtime's
+// field-name mapper; a returned Go error is thrown as a JS exception.
 func (ctx *Context) install() error {
 	obj := ctx.runtime.NewObject()
 	if err := obj.Set("log", ctx.log); err != nil {
