@@ -1,6 +1,7 @@
 package script_test
 
 import (
+	"os"
 	"testing"
 	"time"
 
@@ -49,6 +50,21 @@ func TestStrayClosingBracketCannotEscapeModule(t *testing.T) {
 	h, err := script.Compile(newScript(`}); module.exports = { handle() {} }; (function () {`), nil, nil, 0)
 	require.NoError(t, err)
 	assert.ErrorContains(t, h.Error, "unbalanced brackets")
+}
+
+func TestSourceMapIsNotLoaded(t *testing.T) {
+	// A sourceMappingURL comment must not make the host read a file outside
+	// the scripts dir (goja resolves it against the process's working
+	// directory), so error positions stay those of the script file.
+	t.Chdir(t.TempDir())
+	// Maps lines 1-4 to elsewhere.js.
+	sm := `{"version":3,"sources":["elsewhere.js"],"names":[],"mappings":"AAAA;AACA;AACA;AACA"}`
+	require.NoError(t, os.WriteFile("elsewhere.js.map", []byte(sm), 0o600))
+
+	h, err := script.Compile(newScript("module.exports = {};\nthrow new Error('boom');\n//# sourceMappingURL=elsewhere.js.map"), nil, nil, 0)
+	require.NoError(t, err)
+	require.ErrorContains(t, h.Error, "test.js:2:")
+	assert.NotContains(t, h.Error.Error(), "elsewhere.js")
 }
 
 func TestCompileTimesOutRunawayTopLevel(t *testing.T) {
