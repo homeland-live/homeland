@@ -11,6 +11,17 @@ on:
     paths-ignore:
       - '*.md'
       - 'docs/**'
+  # release.yml runs these checks before publishing an image.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Prefixed, so a calling workflow's own group never matches it.
+  group: ci-${{ github.ref }}
+  # A new push to a pull request supersedes its running checks.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   hadolint:
