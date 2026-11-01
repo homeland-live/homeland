@@ -95,7 +95,9 @@ is retried with exponential backoff from 1s, capped at 1m; neither loop gives up
 
 Shutdown runs in reverse, driven by `cmd/server`: HTTP stops first (10s timeout), then the scheduler and the event service (each waits for
 runs in progress; queued handler runs are dropped), then the z2m connection, `svc/scripts` (watcher and external
-broker), and the database last, after the event writer has drained its queue.
+broker), and the database last, after the event writer has drained its queue. A signal during startup lets startup
+finish, then shuts down without serving. The first signal restores the default handling, so a second SIGINT or
+SIGTERM exits at once.
 
 ## Concurrency at a glance
 
