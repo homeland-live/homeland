@@ -108,11 +108,28 @@ func (r *Repo) vacuum() {
 			return
 		}
 		prev = free
-		if err := r.db.Conn().Exec(fmt.Sprintf("PRAGMA incremental_vacuum(%d)", vacuumPages)).Error; err != nil {
+		if err := r.vacuumStep(); err != nil {
 			slog.Warn("db: incremental vacuum failed", "err", err)
 			return
 		}
 	}
+}
+
+// vacuumStep reclaims up to vacuumPages free pages in one write transaction.
+// SQLite frees one page per row the pragma steps, so every row is drained;
+// Exec would step once and free a single page.
+func (r *Repo) vacuumStep() error {
+	rows, err := r.db.Conn().Raw(fmt.Sprintf("PRAGMA incremental_vacuum(%d)", vacuumPages)).Rows()
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	return rows.Close()
 }
 
 // startRetention prunes once now and then every policy.Interval in a

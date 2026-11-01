@@ -140,3 +140,25 @@ func TestPruneReclaimsFreePages(t *testing.T) {
 	require.NoError(t, rawOpen(t, path).QueryRow("PRAGMA freelist_count").Scan(&free))
 	assert.Zero(t, free, "prune must reclaim every freed page")
 }
+
+// TestVacuumStepReclaimsUpToVacuumPages covers one incremental_vacuum step:
+// SQLite frees one page per row it steps, so a step must drain every row to
+// reclaim up to VacuumPages, not just one.
+func TestVacuumStepReclaimsUpToVacuumPages(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "step.db")
+	s := openAt(t, path)
+	seed(t, s, "lamp", 600)
+	// Delete without Prune, which would vacuum.
+	require.NoError(t, s.ExecSQL("DELETE FROM events"))
+
+	freelist := func() int {
+		var n int
+		require.NoError(t, rawOpen(t, path).QueryRow("PRAGMA freelist_count").Scan(&n))
+		return n
+	}
+	before := freelist()
+	require.Greater(t, before, 1, "the delete must free several pages")
+
+	require.NoError(t, s.VacuumStep())
+	assert.Equal(t, max(0, before-db.VacuumPages), freelist())
+}
