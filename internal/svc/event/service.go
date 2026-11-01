@@ -67,8 +67,9 @@ type run struct {
 // it is called on the MQTT delivery goroutine. It queues the event for
 // storage (written in arrival order, asynchronously, so the handler may run
 // before the event is stored), then queues a run of the device's handler and
-// returns without waiting for it. A device without state or without a
-// handler has no run. Updates delivered after Shutdown are dropped.
+// returns without waiting for it. A device without state, without a handler
+// or with a broken one has no run. Updates delivered after Shutdown are
+// dropped.
 func (svc *Service) handleDevice(dev *z2m.Device) {
 	if !svc.enter() {
 		return
@@ -94,6 +95,15 @@ func (svc *Service) handleDevice(dev *z2m.Device) {
 	if handler == nil {
 		slog.Debug("svc/event: ignore device event with no handler",
 			"device", dev.Spec.FriendlyName,
+		)
+		return
+	}
+	// Debug: the API and UI already report a broken handler, and running it
+	// would only log its error again on every update.
+	if handler.Error != nil {
+		slog.Debug("svc/event: ignore device event with broken handler",
+			"device", dev.Spec.FriendlyName,
+			"err", handler.Error,
 		)
 		return
 	}

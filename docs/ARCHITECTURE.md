@@ -65,7 +65,8 @@ sequenceDiagram
    flushes at least every 250ms. A full queue (1024) blocks rather than losing events.
 4. **Handler run** (`svc/event`). The run is queued on the device's own worker goroutine, so scripts never run on the
    paho goroutine. A device's runs happen in order; devices run in parallel. A device's queue holds 64 runs; when it
-   is full, new updates for that device are dropped and logged.
+   is full, new updates for that device are dropped and logged. A broken handler (including a device with two scripts)
+   gets no run, since the API and UI already report its error.
 
 ## Scripts
 

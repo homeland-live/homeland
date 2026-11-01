@@ -100,15 +100,14 @@ func deviceWithN(ieee, friendly string, n int) *z2m.Device {
 }
 
 // TestUpdateRunsDeviceHandler checks that an update runs the handler resolved
-// for the device's spec, runs nothing when it has none, and logs a broken
-// handler's error.
+// for the device's spec, and runs nothing, logging no error, when it has none
+// or a broken one (the API and UI report that).
 func TestUpdateRunsDeviceHandler(t *testing.T) {
 	const addr, name = "0x00124b00247f9ca8", "living-room-lamp"
 	broken := script.NewBrokenHandler(script.NewScript(name+".js", ""), errors.New("device has two scripts"))
 	cases := map[string]struct {
 		handlers func(t *testing.T, z script.Z2M) handlerMap
 		ran      []string
-		logged   string
 	}{
 		"by IEEE address": {
 			handlers: func(t *testing.T, z script.Z2M) handlerMap { return handlerMap{addr: markerHandler(t, z, addr)} },
@@ -123,7 +122,6 @@ func TestUpdateRunsDeviceHandler(t *testing.T) {
 		},
 		"broken handler": {
 			handlers: func(*testing.T, script.Z2M) handlerMap { return handlerMap{name: broken} },
-			logged:   "device has two scripts",
 		},
 	}
 	for tcName, tc := range cases {
@@ -139,9 +137,7 @@ func TestUpdateRunsDeviceHandler(t *testing.T) {
 				svc.Shutdown()
 
 				assert.Equal(t, tc.ran, z2mRec.recorded())
-				if tc.logged != "" {
-					assert.Contains(t, logs.String(), tc.logged)
-				}
+				assert.Empty(t, logs.String())
 			})
 		})
 	}
