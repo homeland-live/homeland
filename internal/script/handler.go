@@ -1,7 +1,10 @@
 package script
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -31,8 +34,9 @@ type Handler struct {
 	HasHandle bool `json:"hasHandle"`
 	JobCount  int  `json:"jobCount"`
 
-	// Error is why the script failed to compile, or nil. It is a
-	// *httputil.Err, so it marshals to the API's standard {code,msg} shape.
+	// Error is why the script failed to compile, or nil. It keeps the error
+	// it wraps, for errors.Is and errors.As, and marshals to the API's
+	// standard {code,msg} shape (see NewBrokenHandler).
 	Error error `json:"error,omitempty"`
 }
 
@@ -88,13 +92,17 @@ func (h *Handler) Jobs() []ScheduledJob {
 // RunJob runs a scheduled callback as fn(ctx), with the same serialization,
 // timeout and promise handling as Handle, and returns a Go panic during the
 // call as an error. It returns Error for a broken handler and is a no-op for a
-// nil handler.
+// nil handler. A job not from h's Jobs (another handler's, or hand-built) is
+// an error and never runs.
 func (h *Handler) RunJob(job ScheduledJob) error {
 	if h == nil {
 		return nil
 	}
 	if h.Error != nil {
 		return h.Error
+	}
+	if job.owner != h {
+		return errors.New("script: run scheduled job: not a job of this handler")
 	}
 
 	h.mu.Lock()
@@ -110,8 +118,22 @@ func (h *Handler) RunJob(job ScheduledJob) error {
 }
 
 // NewBrokenHandler returns a broken handler for s: it runs nothing, has no
-// jobs, and reports err as its Error (a *httputil.Err, so it marshals to the
-// API's {code,msg} shape).
+// jobs, and reports err as its Error. Error wraps err and marshals to the
+// API's {code,msg} shape, with code 422: the script can't be processed.
 func NewBrokenHandler(s *Script, err error) *Handler {
-	return &Handler{script: s, Error: httputil.Errf("%v", err)}
+	return &Handler{script: s, Error: &handlerError{err: err}}
+}
+
+// handlerError is a broken handler's Error.
+type handlerError struct {
+	err error
+}
+
+func (e *handlerError) Error() string { return e.err.Error() }
+
+func (e *handlerError) Unwrap() error { return e.err }
+
+// MarshalJSON renders e as an httputil.Err.
+func (e *handlerError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(httputil.Err{Code: http.StatusUnprocessableEntity, Msg: e.err.Error()})
 }

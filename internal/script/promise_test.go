@@ -157,6 +157,17 @@ module.exports = { jobs: [{ cron: "0 17 * * *", run }] };
 	assert.ErrorContains(t, h.RunJob(h.Jobs()[0]), "script: run scheduled job: Error: job at run (test.js:4:")
 }
 
+func TestHandleReturnValueIsOnlyCheckedForAPromise(t *testing.T) {
+	// A returned object is not exported to Go to look for a promise, so its
+	// getters never run.
+	h, err := script.Compile(newScript(`
+module.exports = { handle() { return { get x() { throw new Error("read"); } }; } };
+`), nil, nil, time.Second)
+	require.NoError(t, err)
+
+	assert.NoError(t, h.Handle(map[string]any{}))
+}
+
 func TestCompileTopLevelRejectionBreaksScript(t *testing.T) {
 	h, err := script.Compile(newScript(`
 Promise.reject(new Error("init"));

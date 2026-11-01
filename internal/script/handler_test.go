@@ -2,11 +2,15 @@ package script_test
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"testing"
 	"time"
 
 	slogtest "github.com/avakarev/go-util/testutil/slog"
+	"github.com/dop251/goja"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -36,6 +40,19 @@ module.exports = { handle };
 	want := `level=INFO msg="script: log" script=switch.js text="event for workshop-awtrix-switch action= off 51 ` +
 		`{\"friendlyName\":\"workshop-awtrix-switch\"} [1,\"a\"] null undefined true"` + "\n"
 	assert.Equal(t, want, buf.String())
+}
+
+func TestLogRendersErrorsAndKeepsHTMLCharacters(t *testing.T) {
+	// An Error has no enumerable props, so it renders as "Name: message", as
+	// console.log does, not as {}; JSON keeps &, < and > as written.
+	buf := slogtest.Capture(t, slog.LevelInfo)
+	h, err := script.Compile(newScript(`module.exports = { handle(ctx) {
+    ctx.log(new Error("boom"), new TypeError("bad"), { a: "x&y<z>" });
+} };`), nil, nil, 0)
+	require.NoError(t, err)
+	require.NoError(t, h.Handle(map[string]any{}))
+
+	assert.Contains(t, buf.String(), `text="Error: boom TypeError: bad {\"a\":\"x&y<z>\"}"`)
 }
 
 func TestLogRespectsLevel(t *testing.T) {
@@ -158,7 +175,21 @@ func TestMarshalJSONSurfacesError(t *testing.T) {
 		} `json:"error"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &got))
+	assert.Equal(t, http.StatusUnprocessableEntity, got.Error.Code, "a broken script can't be processed")
 	assert.NotEmpty(t, got.Error.Msg, "compile error must be surfaced as a message")
+}
+
+func TestBrokenHandlerKeepsErrorChain(t *testing.T) {
+	// Error keeps what it wraps, so callers can match it with errors.Is/As.
+	sentinel := errors.New("two scripts")
+	h := script.NewBrokenHandler(newScript(""), fmt.Errorf("svc/scripts: %w", sentinel))
+	require.ErrorIs(t, h.Error, sentinel)
+	require.EqualError(t, h.Error, "svc/scripts: two scripts")
+
+	h, err := script.Compile(newScript(`throw new Error("boom");`), nil, nil, 0)
+	require.NoError(t, err)
+	_, ok := errors.AsType[*goja.Exception](h.Error)
+	assert.True(t, ok, "a top-level throw stays a *goja.Exception: %v", h.Error)
 }
 
 func TestMarshalJSONOmitsErrorWhenHealthy(t *testing.T) {
@@ -273,13 +304,22 @@ module.exports = { jobs: [{ cron: "0 17 * * *", run(ctx) { ctx.z2m.publish("lamp
 	assert.ErrorContains(t, h.RunJob(h.Jobs()[0]), "scheduled job panicked: boom")
 }
 
-func TestRunJobWithoutCallableFails(t *testing.T) {
-	// A hand-built ScheduledJob has no callback; running it must fail the
-	// run rather than crash on the nil function.
-	slogtest.Capture(t, slog.LevelError)
-	h, err := script.Compile(newScript(`module.exports = { jobs: [{ cron: "0 17 * * *", run(ctx) {} }] };`), nil, nil, 0)
+func TestRunJobRejectsForeignJob(t *testing.T) {
+	// A job runs only on the handler that compiled it, under that handler's
+	// mutex and timeout. A hand-built job or another handler's job is refused
+	// up front, not run on the wrong runtime or recovered as a host panic.
+	logs := slogtest.Capture(t, slog.LevelError)
+	const src = `module.exports = { jobs: [{ cron: "0 17 * * *", run(ctx) {} }] };`
+	h, err := script.Compile(newScript(src), nil, nil, 0)
 	require.NoError(t, err)
-	require.NoError(t, h.Error)
+	other, err := script.Compile(newScript(src), nil, nil, 0)
+	require.NoError(t, err)
+	require.Len(t, other.Jobs(), 1)
 
-	assert.ErrorContains(t, h.RunJob(script.ScheduledJob{CronExpr: "0 17 * * *"}), "scheduled job panicked")
+	const msg = "script: run scheduled job: not a job of this handler"
+	require.EqualError(t, h.RunJob(script.ScheduledJob{CronExpr: "0 17 * * *"}), msg)
+	require.EqualError(t, h.RunJob(other.Jobs()[0]), msg)
+	require.EqualError(t, (&script.Handler{}).RunJob(other.Jobs()[0]), msg, "a zero Handler must not crash")
+	require.NoError(t, h.RunJob(h.Jobs()[0]))
+	assert.Empty(t, logs.String())
 }

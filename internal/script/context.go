@@ -173,7 +173,8 @@ func (ctx *Context) log(call goja.FunctionCall) goja.Value {
 }
 
 // formatLogArg renders a ctx.log argument the way console.log would: strings
-// verbatim, objects and arrays as JSON, everything else in its JS form.
+// verbatim, errors as "Name: message", objects and arrays as JSON (without
+// escaping &, < and >), everything else in its JS form.
 func formatLogArg(v goja.Value) string {
 	if v == nil || goja.IsUndefined(v) {
 		return "undefined"
@@ -181,12 +182,19 @@ func formatLogArg(v goja.Value) string {
 	if goja.IsNull(v) {
 		return "null"
 	}
+	// An Error's props aren't enumerable, so as JSON it would be {}.
+	if obj, ok := v.(*goja.Object); ok && obj.ClassName() == "Error" {
+		return v.String()
+	}
 	switch exp := v.Export().(type) {
 	case string:
 		return exp
 	case map[string]any, []any:
-		if b, err := json.Marshal(exp); err == nil {
-			return string(b)
+		var b strings.Builder
+		enc := json.NewEncoder(&b)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(exp); err == nil {
+			return strings.TrimSuffix(b.String(), "\n")
 		}
 	}
 	return v.String()

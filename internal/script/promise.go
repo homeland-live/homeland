@@ -3,6 +3,7 @@ package script
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -54,9 +55,13 @@ func (ctx *Context) settle(ret goja.Value) error {
 	return errors.Join(errs...)
 }
 
-// exportPromise returns v as a promise, when it is one.
+// promiseType is what a promise exports to.
+var promiseType = reflect.TypeFor[*goja.Promise]()
+
+// exportPromise returns v as a promise, when it is one. Only a promise is
+// exported: exporting another object copies it deeply and runs its getters.
 func exportPromise(v goja.Value) (*goja.Promise, bool) {
-	if v == nil {
+	if v == nil || v.ExportType() != promiseType {
 		return nil, false
 	}
 	p, ok := v.Export().(*goja.Promise)
