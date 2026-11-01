@@ -197,6 +197,10 @@ func TestQueryEventsRequiresArgs(t *testing.T) {
 	require.Error(t, err, "expected error for invalid page (Num=0)")
 	_, err = s.QueryEvents("lamp", &db.Page{Num: 1, Size: 100})
 	require.Error(t, err, "expected error for invalid page (Size>25)")
+	_, err = s.QueryEvents("lamp", &db.Page{Num: db.MaxPageNum + 1, Size: 25})
+	require.Error(t, err, "expected error for invalid page (Num>MaxPageNum)")
+	_, err = s.QueryEvents("lamp", &db.Page{Num: db.MaxPageNum, Size: 25})
+	require.NoError(t, err, "the last valid page")
 }
 
 func TestQueryEventsReturnsEmptyPageNotNil(t *testing.T) {
