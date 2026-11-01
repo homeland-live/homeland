@@ -198,6 +198,22 @@ func TestHandleIgnoresEmptyPayload(t *testing.T) {
 	assert.NotContains(t, logs.String(), "failed to parse device state")
 }
 
+// TestHandleIgnoresNullPayload covers a JSON null, which decodes to no props:
+// like an empty payload it is not a state, so it can't become a device's
+// first state, nor an empty update of a device without a definition.
+func TestHandleIgnoresNullPayload(t *testing.T) {
+	c, calls := newCountingClient(t)
+	c.Handle("bridge/devices", []byte(`[{"ieee_address":"0x02","friendly_name":"diy","definition":null}]`))
+
+	c.Handle("diy", []byte(`null`))
+	assert.Nil(t, c.DeviceState("diy"), "null is not the first state")
+
+	c.Handle("diy", []byte(`{"state":"ON"}`))
+	c.Handle("diy", []byte(`null`))
+	assert.Zero(t, *calls)
+	assert.Equal(t, map[string]any{"state": "ON"}, c.DeviceState("diy").Props())
+}
+
 // TestHandleDropsStateMissingPrimaryProp covers an incomplete state: it is
 // neither stored nor an event.
 func TestHandleDropsStateMissingPrimaryProp(t *testing.T) {

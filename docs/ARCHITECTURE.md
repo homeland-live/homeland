@@ -49,9 +49,9 @@ sequenceDiagram
 ```
 
 1. **Filtering** (`z2m`). The client subscribes to `#` under the base topic. The base topic itself, bridge topics it
-   doesn't use, command topics (`set`, `get`), `availability` and empty payloads are ignored; the `device` and
-   `update` keys are stripped from state. `action` is an event, not state, so it is stripped from retained copies,
-   which the broker resends on every reconnect: their press already happened.
+   doesn't use, command topics (`set`, `get`), `availability` and empty or `null` payloads are ignored; the `device`
+   and `update` keys are stripped from state. `action` is an event, not state, so it is stripped from retained
+   copies, which the broker resends on every reconnect: their press already happened.
 2. **Propagation** (`z2m/registry.go`). A device's first state is stored but not passed on: it is the initial
    sync-up from retained messages. State that arrives before `bridge/devices` is moved to the device's IEEE address
    once the roster arrives. A state missing a primary property of the device's schema (`action` only when it is

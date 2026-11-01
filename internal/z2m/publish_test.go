@@ -49,7 +49,6 @@ func TestPublishPropSendsScalarToPropTopic(t *testing.T) {
 		{"float as JSON", 0.5, `0.5`},
 		{"bool as JSON", true, `true`},
 		{"object as JSON", map[string]any{"x": 0.3}, `{"x":0.3}`},
-		{"unmarshalable falls back to %v", math.NaN(), `NaN`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, m := newPublishingClient(t)
@@ -57,6 +56,19 @@ func TestPublishPropSendsScalarToPropTopic(t *testing.T) {
 			require.NoError(t, c.PublishProp("lamp", "state", tc.value))
 
 			assert.Equal(t, []mqtttest.Message{{Topic: "lamp/set/state", Payload: tc.payload}}, m.Published())
+		})
+	}
+}
+
+func TestPublishPropRejectsUnmarshalableValue(t *testing.T) {
+	// Like Publish, it sends nothing rather than a %v rendering such as "NaN"
+	// or a pointer address.
+	for name, value := range map[string]any{"NaN": math.NaN(), "channel": make(chan int)} {
+		t.Run(name, func(t *testing.T) {
+			c, m := newPublishingClient(t)
+
+			require.ErrorContains(t, c.PublishProp("lamp", "state", value), "z2m: marshal publish value")
+			assert.Empty(t, m.Published())
 		})
 	}
 }

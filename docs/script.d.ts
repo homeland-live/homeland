@@ -116,7 +116,9 @@ interface Z2M {
    * Set a single property on a device via the `set/<prop>` topic, e.g.
    * `ctx.z2m.publishProp("living-room-lamp", "state", "OFF")`.
    *
-   * Strings are sent verbatim (unquoted); other values are JSON-encoded.
+   * Strings are sent verbatim (unquoted); other values are JSON-encoded. A
+   * value JSON can't encode, such as `NaN`, `Infinity` or a function, throws
+   * and sends nothing.
    *
    * @param friendlyName Device friendly name.
    * @param prop         Property name (e.g. "state", "brightness").

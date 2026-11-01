@@ -1,7 +1,9 @@
 package z2m_test
 
 import (
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,6 +47,33 @@ func TestFirstStateSkipsNotify(t *testing.T) {
 	// A new prop makes it a change, so it is fanned out.
 	c.Handle("bulb", []byte(`{"state":"OFF","linkquality":99,"power_on_behavior":"on"}`))
 	assert.Equal(t, 2, calls, "subscriber calls after a state with a new prop")
+}
+
+// TestSubscriberMaySubscribe verifies that a subscriber registering another
+// one doesn't deadlock, and that the new one gets the updates after it.
+func TestSubscriberMaySubscribe(t *testing.T) {
+	c, err := z2m.NewClient(nil, z2m.WithMQTT(&mqtttest.Client{Connected: true}))
+	require.NoError(t, err)
+	var once sync.Once
+	var late int
+	c.Subscribe(func(*z2m.Device) {
+		once.Do(func() { c.Subscribe(func(*z2m.Device) { late++ }) })
+	})
+	c.Handle("bridge/devices", []byte(`[{"ieee_address":"0x01","friendly_name":"lamp"}]`))
+	c.Handle("lamp", []byte(`{"state":"ON"}`))
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		c.Handle("lamp", []byte(`{"state":"OFF"}`))
+		c.Handle("lamp", []byte(`{"state":"ON"}`))
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a subscriber calling Subscribe deadlocked")
+	}
+	assert.Equal(t, 1, late, "a subscriber added during an update gets the next one")
 }
 
 // TestDevicesSortedByFriendlyName verifies Devices is deterministic: sorted by

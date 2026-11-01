@@ -106,18 +106,21 @@ func (c *Client) Disconnect() {
 // Subscribe registers fn to be called on every device state update.
 // Subscribers run synchronously, in registration order, on the MQTT delivery
 // goroutine, so a slow one delays all others and the next message: keep them
-// fast or hand work off. Safe for concurrent use.
+// fast or hand work off. Safe for concurrent use, including from a
+// subscriber; one added during an update gets the updates after it.
 func (c *Client) Subscribe(fn UpdateFunc) {
 	c.subMu.Lock()
 	defer c.subMu.Unlock()
 	c.subs = append(c.subs, fn)
 }
 
-// notify calls every subscriber with dev.
+// notify calls every subscriber with dev, outside the lock. Subscribe only
+// appends, so the subscribers the copied slice holds never change.
 func (c *Client) notify(dev *Device) {
 	c.subMu.RLock()
-	defer c.subMu.RUnlock()
-	for _, fn := range c.subs {
+	subs := c.subs
+	c.subMu.RUnlock()
+	for _, fn := range subs {
 		fn(dev)
 	}
 }
@@ -242,7 +245,8 @@ func (c *Client) handleBridgeHealth(payload []byte) {
 // handleDeviceState records the state message of device id (a friendly name
 // or IEEE address) and notifies subscribers when the registry says the update
 // should propagate. An empty payload is z2m clearing a retained topic (on a
-// device rename or removal) and is ignored.
+// device rename or removal) and is ignored, as is a JSON null, which carries
+// no props.
 func (c *Client) handleDeviceState(id string, payload []byte, retained bool) {
 	if len(payload) == 0 {
 		return
@@ -251,6 +255,10 @@ func (c *Client) handleDeviceState(id string, payload []byte, retained bool) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(payload, &raw); err != nil {
 		slog.Error("z2m: failed to parse device state", "device", id, "err", err)
+		return
+	}
+	// A JSON null decodes without error to no props at all.
+	if raw == nil {
 		return
 	}
 
@@ -287,22 +295,24 @@ func (c *Client) Publish(friendlyName string, payload any) error {
 
 // PublishProp sends a raw value to "<friendlyName>/set/<prop>", so
 // PublishProp("bulb", "state", "ON") is equivalent to
-// Publish("bulb", {"state": "ON"}).
+// Publish("bulb", {"state": "ON"}). A string is sent verbatim and any other
+// value as JSON; a value JSON can't encode (NaN, a channel) is an error, and
+// nothing is sent.
 func (c *Client) PublishProp(friendlyName, prop string, value any) error {
+	body, err := scalarPayload(value)
+	if err != nil {
+		return fmt.Errorf("z2m: marshal publish value: %w", err)
+	}
 	topic := friendlyName + "/set/" + prop
-	return c.mqtt.Publish(topic, []byte(scalarPayload(value)))
+	return c.mqtt.Publish(topic, body)
 }
 
 // scalarPayload renders a string verbatim and any other value as JSON.
-func scalarPayload(value any) string {
+func scalarPayload(value any) ([]byte, error) {
 	if s, ok := value.(string); ok {
-		return s
+		return []byte(s), nil
 	}
-	b, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Sprintf("%v", value)
-	}
-	return string(b)
+	return json.Marshal(value)
 }
 
 // Devices returns a snapshot of all known devices, sorted by friendly name.
