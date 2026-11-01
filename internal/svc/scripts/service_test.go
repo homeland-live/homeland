@@ -101,6 +101,15 @@ func (r *changeRecorder) snapshot() []string {
 	return append([]string(nil), r.changes...)
 }
 
+// waitFor waits until r has recorded change. The service updates its cache
+// before notifying, so once change is recorded the cache reflects it too;
+// waiting on the cache instead could check r before it is notified.
+func (r *changeRecorder) waitFor(t *testing.T, change string) {
+	t.Helper()
+	require.Eventually(t, func() bool { return slices.Contains(r.snapshot(), change) },
+		2*time.Second, 10*time.Millisecond, "no %q change recorded", change)
+}
+
 // lamp is a device whose scripts would be 0x01.js and lamp.js.
 var lamp = &z2m.DeviceSpec{IEEEAddress: "0x01", FriendlyName: "lamp"}
 
