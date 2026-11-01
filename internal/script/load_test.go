@@ -15,8 +15,8 @@ func TestLoadAllSetsDeviceIDForBothIDForms(t *testing.T) {
 	dir := t.TempDir()
 	// A single device may be scripted under either identity; the loader has no
 	// z2m/device context, so it loads both files and keys each by its own id.
-	writeScript(t, dir, "living-room-lamp.js", `function handle(e, c) {}`)
-	writeScript(t, dir, "0x00124b00247f9ca8.js", `function handle(e, c) {}`)
+	writeScript(t, dir, "living-room-lamp.js", `function handle(ctx, state) {}`)
+	writeScript(t, dir, "0x00124b00247f9ca8.js", `function handle(ctx, state) {}`)
 	// Non-".js" entries are skipped.
 	writeScript(t, dir, "README.md", `ignore me`)
 
@@ -36,7 +36,7 @@ func TestLoadAllSetsDeviceIDForBothIDForms(t *testing.T) {
 
 func TestLoadSetsDeviceID(t *testing.T) {
 	dir := t.TempDir()
-	writeScript(t, dir, "0x00124b00247f9ca8.js", `function handle(e, c) {}`)
+	writeScript(t, dir, "0x00124b00247f9ca8.js", `function handle(ctx, state) {}`)
 
 	s, err := script.Load(dir, "0x00124b00247f9ca8.js")
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestLoadAllEmptyDirIsNotExist(t *testing.T) {
 
 func TestLoadAllSkipsUnreadableAndHiddenFiles(t *testing.T) {
 	dir := t.TempDir()
-	writeScript(t, dir, "lamp.js", `function handle(e, c) {}`)
+	writeScript(t, dir, "lamp.js", `function handle(ctx, state) {}`)
 	// An editor lockfile: a dangling symlink with a hidden name.
 	require.NoError(t, os.Symlink("user@host.1234", filepath.Join(dir, ".#lamp.js")))
 	// A broken symlink and a directory, both with a script name.
@@ -59,7 +59,7 @@ func TestLoadAllSkipsUnreadableAndHiddenFiles(t *testing.T) {
 	require.NoError(t, os.Mkdir(filepath.Join(dir, "folder.js"), 0o700))
 	// A symlink escaping the scripts dir is refused by os.Root.
 	outside := filepath.Join(t.TempDir(), "outside.js")
-	require.NoError(t, os.WriteFile(outside, []byte(`function handle(e, c) {}`), 0o600))
+	require.NoError(t, os.WriteFile(outside, []byte(`function handle(ctx, state) {}`), 0o600))
 	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "escape.js")))
 
 	scripts, err := script.LoadAll(dir)

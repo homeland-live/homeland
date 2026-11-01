@@ -19,7 +19,7 @@ func TestScriptWithoutExportsYieldsBrokenHandler(t *testing.T) {
 	require.NoError(t, err, "missing exports must not be a Compile error")
 	require.NotNil(t, h)
 	require.ErrorContains(t, h.Error, "must export a handle function, at least one job, or both")
-	assert.Error(t, h.Handle(map[string]any{"action": "any"}), "broken handler must refuse to run")
+	assert.Error(t, h.Handle(map[string]any{"action": "any"}, nil), "broken handler must refuse to run")
 }
 
 func TestSyntaxErrorYieldsBrokenHandler(t *testing.T) {
@@ -29,7 +29,7 @@ func TestSyntaxErrorYieldsBrokenHandler(t *testing.T) {
 	require.NoError(t, err, "syntax error must not be a Compile error")
 	require.NotNil(t, h)
 	require.Error(t, h.Error, "broken handler must record the compile error")
-	assert.Error(t, h.Handle(map[string]any{"action": "any"}), "broken handler must refuse to run")
+	assert.Error(t, h.Handle(map[string]any{"action": "any"}, nil), "broken handler must refuse to run")
 }
 
 func TestErrorsReportScriptLineNumbers(t *testing.T) {
@@ -37,7 +37,7 @@ func TestErrorsReportScriptLineNumbers(t *testing.T) {
 	h, err := script.Compile(newScript("module.exports = {\n  handle(ctx, state) {\n    missing();\n  },\n};"), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
-	require.ErrorContains(t, h.Handle(map[string]any{}), "test.js:3:")
+	require.ErrorContains(t, h.Handle(map[string]any{}, nil), "test.js:3:")
 
 	h, err = script.Compile(newScript("module.exports = {};\n\nthrow new Error('boom');"), nil, nil, 0)
 	require.NoError(t, err)

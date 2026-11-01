@@ -12,7 +12,7 @@
 // `module.exports` to `{ handle, jobs }`, with a `handle` function, at least
 // one job, or both:
 //
-//     function handle(ctx, state) { ... }
+//     function handle(ctx, state, prevState) { ... }
 //
 //     function turnOffLamp(ctx) { ... }
 //
@@ -79,8 +79,9 @@
 //     /**
 //      * @param {HandlerContext} ctx
 //      * @param {DeviceState} state
+//      * @param {DeviceState | null} prevState
 //      */
-//     function handle(ctx, state) { ... }
+//     function handle(ctx, state, prevState) { ... }
 //
 //     /** @param {HandlerContext} ctx */
 //     function turnOffLamp(ctx) { ... }
@@ -164,8 +165,8 @@ interface MQTT {
 }
 
 /**
- * A device's full latest state (not just the changed properties): the second
- * argument to `handle`, and what `ctx.z2m.getState` returns.
+ * A device's full latest state (not just the changed properties): the `state`
+ * (and `prevState`) argument to `handle`, and what `ctx.z2m.getState` returns.
  *
  * A plain object keyed by property name, decoded from the state Zigbee2MQTT
  * reported, without its `device` and `update` properties. The exact
@@ -192,8 +193,8 @@ interface DeviceState {
 }
 
 /**
- * Host context passed to `handle` and to every job's `run`, always as the first
- * argument.
+ * Host context passed as the first argument to `handle` and to every job's
+ * `run`.
  */
 interface HandlerContext {
   /**
@@ -249,10 +250,22 @@ interface HandlerContext {
  *
  * It may be async (see the runtime model above).
  *
- * @param ctx   Host APIs: log, sleep, z2m and mqtt.
- * @param state The device's full latest state.
+ * `prevState` tells what changed, e.g.
+ * `if (prevState && prevState.occupancy !== state.occupancy) { ... }`. It is
+ * the device's last stored state before this one, or the initial sync-up
+ * after a (re)start. Duplicates and incomplete states are never stored, so
+ * they don't replace it. A stored state replaces it even when `handle` didn't
+ * run for it: before the script existed, while it was broken, or when the
+ * device's queue was full and the run was dropped. So under load `handle` can
+ * miss a change; prefer acting on `state` when the action is safe to repeat.
+ * Like `state`, it may carry the `action` of the press that produced it. It
+ * is `null` when the host has no previous state, so check it before use.
+ *
+ * @param ctx       Host APIs: log, sleep, z2m and mqtt.
+ * @param state     The device's full latest state.
+ * @param prevState The device's state just before `state`, or `null`.
  */
-type Handle = (ctx: HandlerContext, state: DeviceState) => void | Promise<void>;
+type Handle = (ctx: HandlerContext, state: DeviceState, prevState: DeviceState | null) => void | Promise<void>;
 
 /**
  * A cron-scheduled job. `run` is called at every tick of `cron`,

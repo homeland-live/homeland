@@ -33,7 +33,7 @@ module.exports = { handle };
 		"linkquality": 51,
 		"device":      map[string]any{"friendlyName": "workshop-awtrix-switch"},
 	}
-	require.NoError(t, h.Handle(state))
+	require.NoError(t, h.Handle(state, nil))
 
 	// Logged at Info through slog, tagged with the script, with console.log-like
 	// rendering: strings verbatim, objects/arrays as JSON.
@@ -50,7 +50,7 @@ func TestLogRendersErrorsAndKeepsHTMLCharacters(t *testing.T) {
     ctx.log(new Error("boom"), new TypeError("bad"), { a: "x&y<z>" });
 } };`), nil, nil, 0)
 	require.NoError(t, err)
-	require.NoError(t, h.Handle(map[string]any{}))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
 
 	assert.Contains(t, buf.String(), `text="Error: boom TypeError: bad {\"a\":\"x&y<z>\"}"`)
 }
@@ -60,7 +60,7 @@ func TestLogRespectsLevel(t *testing.T) {
 	buf := slogtest.Capture(t, slog.LevelWarn)
 	h, err := script.Compile(newScript(`module.exports = { handle(ctx, state) { ctx.log("hidden"); } };`), nil, nil, 0)
 	require.NoError(t, err)
-	require.NoError(t, h.Handle(map[string]any{}))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
 	assert.Empty(t, buf.String())
 }
 
@@ -78,7 +78,7 @@ module.exports = { handle };
 	require.NoError(t, err)
 
 	done := make(chan error, 1)
-	go func() { done <- h.Handle(map[string]any{"action": "any"}) }()
+	go func() { done <- h.Handle(map[string]any{"action": "any"}, nil) }()
 
 	select {
 	case herr := <-done:
@@ -100,8 +100,8 @@ module.exports = { handle };
 	require.NoError(t, err)
 
 	for range 20 {
-		require.Error(t, h.Handle(map[string]any{"spin": true}))
-		require.NoError(t, h.Handle(map[string]any{"spin": false}), "a timeout must not leak into the next run")
+		require.Error(t, h.Handle(map[string]any{"spin": true}, nil))
+		require.NoError(t, h.Handle(map[string]any{"spin": false}, nil), "a timeout must not leak into the next run")
 	}
 }
 
@@ -118,8 +118,8 @@ module.exports = { handle };
 `), z2m, nil, time.Second)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{"action": "on"}))
-	require.NoError(t, h.Handle(map[string]any{"action": "on"}), "a second call must not inherit a stale interrupt")
+	require.NoError(t, h.Handle(map[string]any{"action": "on"}, nil))
+	require.NoError(t, h.Handle(map[string]any{"action": "on"}, nil), "a second call must not inherit a stale interrupt")
 	assert.Len(t, z2m.publishPropCalls, 2)
 }
 
@@ -137,8 +137,8 @@ module.exports = { handle };
 `), z2m, nil, 0)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{}))
-	require.NoError(t, h.Handle(map[string]any{}))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
 	require.Len(t, z2m.publishPropCalls, 2)
 	assert.Equal(t, int64(2), z2m.publishPropCalls[1].value)
 }
@@ -289,8 +289,8 @@ module.exports = { handle };
 `), &panickyZ2M{}, nil, time.Second)
 	require.NoError(t, err)
 
-	require.ErrorContains(t, h.Handle(map[string]any{"publish": true}), "handler panicked: boom")
-	assert.NoError(t, h.Handle(map[string]any{"publish": false}), "the handler must survive a recovered panic")
+	require.ErrorContains(t, h.Handle(map[string]any{"publish": true}, nil), "handler panicked: boom")
+	assert.NoError(t, h.Handle(map[string]any{"publish": false}, nil), "the handler must survive a recovered panic")
 }
 
 func TestRunJobRecoversGoPanic(t *testing.T) {
