@@ -236,8 +236,8 @@ Requires Go 1.27+ and Node (for the UI).
 ```bash
 make build   # build ./bin/server
 make dev     # run server + UI watcher together (goreman)
-make test    # gotestsum: go test -race ./...
-make lint    # golangci-lint
+make test    # gotestsum: go test -race ./cmd/... ./internal/...
+make lint    # golangci-lint, including gofmt/goimports (make fmt fixes them)
 make ci      # lint + vet + test + docs-check
 make docs    # regenerate the example gallery in docs/README.md
 ```

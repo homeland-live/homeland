@@ -1,7 +1,8 @@
 # Docs targets, included by the root Makefile. Recipes run from the repo root.
 #
 # The docs-examples-* targets use the tools in ui/node_modules (oxfmt and
-# typescript, versioned by ui/package-lock.json), installing them on first use.
+# typescript, versioned by ui/package-lock.json), installing them through the
+# root Makefile's ui/node_modules/.package-lock.json rule when missing or stale.
 
 UI_BIN := ui/node_modules/.bin
 
@@ -14,12 +15,6 @@ docs-check:
 	@echo ">> Checking docs are up to date..."
 	@go run ./cmd/gen-docs -check
 .PHONY: docs-check
-
-# npm writes this file on every install; an order-only prerequisite, so it only
-# installs when ui/node_modules is missing.
-ui/node_modules/.package-lock.json:
-	@echo ">> Installing UI dependencies..."
-	@npm ci --prefix ui
 
 EXAMPLE_SCRIPTS := docs/examples docs/compose/homeland/scripts
 # The examples share the UI's formatting style.
