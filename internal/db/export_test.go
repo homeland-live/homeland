@@ -8,6 +8,14 @@ func (r *Repo) ExecSQL(sql string) error {
 	return r.db.Conn().Exec(sql).Error
 }
 
+// VacuumPages is how many free pages one VacuumStep reclaims at most.
+const VacuumPages = vacuumPages
+
+// VacuumStep runs one incremental vacuum step.
+func (r *Repo) VacuumStep() error {
+	return r.vacuumStep()
+}
+
 // OnInsert calls fn before every INSERT the repo attempts, a batch or a single
 // row, so tests can count the event writer's attempts. Call it before
 // enqueuing events.
