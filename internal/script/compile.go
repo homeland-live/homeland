@@ -7,6 +7,7 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja/ast"
+	"github.com/dop251/goja/parser"
 )
 
 // A script runs as the body of a strict-mode function, CommonJS style: its
@@ -80,7 +81,10 @@ func Compile(script *Script, z2m Z2M, mqtt MQTT, timeout time.Duration) (*Handle
 // script would otherwise close the wrapper early and run the rest at global
 // scope.
 func compileModule(script *Script) (*goja.Program, error) {
-	prg, err := goja.Parse(script.FileName, modulePrefix+script.Content+moduleSuffix)
+	// Source maps are off: goja would read a sourceMappingURL target from the
+	// real filesystem, outside the scripts dir and before any timeout applies.
+	prg, err := goja.Parse(script.FileName, modulePrefix+script.Content+moduleSuffix,
+		parser.WithDisableSourceMaps)
 	if err != nil {
 		return nil, err
 	}
