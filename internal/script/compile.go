@@ -66,14 +66,18 @@ func Compile(script *Script, z2m Z2M, mqtt MQTT, timeout time.Duration) (*Handle
 		return broken(err), nil
 	}
 
-	return &Handler{
+	h := &Handler{
 		script:    script,
 		ctx:       ctx,
 		handle:    handle,
 		timeout:   timeout,
 		HasHandle: handle != nil,
 		JobCount:  len(ctx.jobs),
-	}, nil
+	}
+	for i := range ctx.jobs {
+		ctx.jobs[i].owner = h
+	}
+	return h, nil
 }
 
 // compileModule parses the script wrapped as a module function and compiles

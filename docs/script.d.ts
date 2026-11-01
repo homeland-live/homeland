@@ -198,9 +198,10 @@ interface DeviceState {
 interface HandlerContext {
   /**
    * Log to the host, e.g. `ctx.log("action:", state.action)`. Arguments are
-   * joined with spaces like `console.log` (strings verbatim, objects and
-   * arrays as JSON) and written at info level, tagged with the script's file
-   * name, so the host's `LOG_LEVEL` applies. There is no `console`.
+   * joined with spaces like `console.log` (strings verbatim, errors as
+   * `Name: message`, objects and arrays as JSON) and written at info level,
+   * tagged with the script's file name, so the host's `LOG_LEVEL` applies.
+   * There is no `console`.
    *
    * @param args Values to log.
    */
