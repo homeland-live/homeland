@@ -167,18 +167,21 @@ func (svc *Service) drop(devID string) bool {
 // initial set compiled by Start, so register before Start. Subscribers run
 // synchronously, in registration order, on the goroutine that made the change
 // (Start's caller, then the watcher), so keep them fast. Safe for concurrent
-// use.
+// use, including from a subscriber; one added during a change gets the
+// changes after it.
 func (svc *Service) Subscribe(fn ChangeFunc) {
 	svc.subMu.Lock()
 	defer svc.subMu.Unlock()
 	svc.subs = append(svc.subs, fn)
 }
 
-// notify calls every subscriber with the change.
+// notify calls every subscriber with the change, outside the lock. Subscribe
+// only appends, so the subscribers the copied slice holds never change.
 func (svc *Service) notify(devID string, h *script.Handler) {
 	svc.subMu.RLock()
-	defer svc.subMu.RUnlock()
-	for _, fn := range svc.subs {
+	subs := svc.subs
+	svc.subMu.RUnlock()
+	for _, fn := range subs {
 		fn(devID, h)
 	}
 }

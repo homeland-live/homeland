@@ -218,6 +218,30 @@ func TestStartDisconnectsExtBrokerWhenLaterStepFails(t *testing.T) {
 
 // Subscribe.
 
+func TestSubscriberMaySubscribe(t *testing.T) {
+	// A subscriber registering another one must not deadlock; the new one
+	// gets the changes after the one it was added in.
+	dir := t.TempDir()
+	writeScripts(t, dir, "lamp.js", "switch.js")
+	svc := scripts.New(&config.Config{Scripts: &config.Scripts{Dir: dir}}, stubZ2M{})
+	late := &changeRecorder{}
+	var once sync.Once
+	svc.Subscribe(func(string, *script.Handler) {
+		once.Do(func() { svc.Subscribe(late.record) })
+	})
+
+	started := make(chan error, 1)
+	go func() { started <- svc.Start() }()
+	select {
+	case err := <-started:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("a subscriber calling Subscribe deadlocked")
+	}
+	t.Cleanup(svc.Shutdown)
+	assert.Equal(t, []string{"+switch"}, late.snapshot())
+}
+
 func TestSubscribeFansOutInitialSetToEverySubscriber(t *testing.T) {
 	dir := t.TempDir()
 	writeScripts(t, dir, "lamp.js", "switch.js")
