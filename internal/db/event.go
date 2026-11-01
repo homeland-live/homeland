@@ -17,15 +17,17 @@ type Event struct {
 	Payload     map[string]json.RawMessage `json:"payload" gorm:"serializer:json;type:blob"`
 }
 
-// stamp assigns e's id and, when unset, a UTC CreatedAt, so stored times sort
-// correctly (SQLite compares them as strings).
+// stamp assigns e's id, sets an unset CreatedAt to now, and converts
+// CreatedAt to UTC, so stored times sort by instant (SQLite compares them as
+// strings).
 func (e *Event) stamp() error {
 	if err := e.EnsureID(); err != nil {
 		return fmt.Errorf("db: event id: %w", err)
 	}
 	if e.CreatedAt.IsZero() {
-		e.CreatedAt = time.Now().UTC()
+		e.CreatedAt = time.Now()
 	}
+	e.CreatedAt = e.CreatedAt.UTC()
 	return nil
 }
 
@@ -69,11 +71,10 @@ func (r *Repo) QueryEvents(ieeeAddress string, p *Page) ([]Event, error) {
 	}
 	p.Count = int(count)
 
-	// Served by the (ieee_address, created_at) index, with no sort step.
 	events := make([]Event, 0, p.Size)
 	if err := r.db.Conn().
 		Where("ieee_address = ?", ieeeAddress).
-		Order("created_at DESC").
+		Order("created_at DESC, rowid DESC").
 		Limit(p.Size).
 		Offset(p.Offset()).
 		Find(&events).Error; err != nil {
