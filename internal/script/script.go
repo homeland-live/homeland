@@ -1,9 +1,10 @@
 // Package script runs user-defined JavaScript device scripts on the goja
 // ECMAScript engine. A script is a CommonJS-style module with no host globals:
-// it exports a handle(ctx, state) function, which receives the device's full
-// latest state on each update, a list of cron jobs, or both:
+// it exports a handle(ctx, state, prevState) function, which receives the
+// device's full latest state and the one before it on each update, a list of
+// cron jobs, or both:
 //
-//	function handle(ctx, state) {
+//	function handle(ctx, state, prevState) {
 //	    if (state.action === "off") {
 //	        ctx.z2m.publishProp("living-room-lamp", "state", "OFF");
 //	    }

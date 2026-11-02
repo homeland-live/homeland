@@ -315,14 +315,14 @@ func TestHandlerReturnsBrokenScript(t *testing.T) {
 	h := broken(t, "lamp.js")
 	got := withHandlers(nil, map[string]*script.Handler{"lamp": h}).Handler(lamp)
 	require.Same(t, h, got)
-	assert.Error(t, got.Handle(map[string]any{}))
+	assert.Error(t, got.Handle(map[string]any{}, nil))
 }
 
 func TestHandlerWithoutScriptIsNil(t *testing.T) {
 	svc := withHandlers(nil, map[string]*script.Handler{"other": compiled(t, "other.js")})
 	h := svc.Handler(lamp)
 	assert.Nil(t, h)
-	require.NoError(t, h.Handle(map[string]any{}), "a nil handler is a no-op")
+	require.NoError(t, h.Handle(map[string]any{}, nil), "a nil handler is a no-op")
 	assert.Nil(t, svc.Handler(nil))
 }
 
@@ -343,7 +343,7 @@ func TestHandlerWithScriptsUnderBothIDsIsConflict(t *testing.T) {
 			assert.False(t, h.HasHandle)
 			assert.Empty(t, h.Jobs())
 			assert.Equal(t, "0x01.js", h.Script().FileName)
-			require.Error(t, h.Handle(map[string]any{}), "neither script may run")
+			require.Error(t, h.Handle(map[string]any{}, nil), "neither script may run")
 		})
 	}
 }

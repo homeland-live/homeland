@@ -21,15 +21,17 @@ import (
 // recordingZ2M records publishProp calls so a test can tell which handler ran.
 // It satisfies script.Z2M and is safe for the device workers to call.
 type recordingZ2M struct {
-	mu    sync.Mutex
-	props []string
+	mu     sync.Mutex
+	props  []string
+	values []any
 }
 
 func (r *recordingZ2M) Publish(_ string, _ any) error { return nil }
-func (r *recordingZ2M) PublishProp(name, prop string, _ any) error {
+func (r *recordingZ2M) PublishProp(name, prop string, value any) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.props = append(r.props, name+"."+prop)
+	r.values = append(r.values, value)
 	return nil
 }
 func (r *recordingZ2M) DeviceState(_ string) *z2m.DeviceState { return nil }
@@ -38,6 +40,23 @@ func (r *recordingZ2M) recorded() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]string(nil), r.props...)
+}
+
+// recordedValues returns the values of every publishProp call, in order.
+func (r *recordingZ2M) recordedValues() []any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]any(nil), r.values...)
+}
+
+// lastValue returns the value of the most recent publishProp call.
+func (r *recordingZ2M) lastValue() any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.values) == 0 {
+		return nil
+	}
+	return r.values[len(r.values)-1]
 }
 
 // markerHandler compiles a handler that publishes a single marker prop, so a
@@ -69,7 +88,8 @@ type updates struct{ fn z2m.UpdateFunc }
 func (u *updates) Subscribe(fn z2m.UpdateFunc) { u.fn = fn }
 
 // serviceWith starts an event Service over handlers, storing no events, and
-// returns it with a func that delivers an update to it.
+// returns it with the subscriber it registered, so a test can deliver
+// updates to it.
 func serviceWith(t *testing.T, handlers handlerMap) (svc *event.Service, deliver z2m.UpdateFunc) {
 	t.Helper()
 	return serviceWithStore(t, handlers, nil)
@@ -83,6 +103,18 @@ func serviceWithStore(t *testing.T, handlers handlerMap, store event.Store) (svc
 	require.NoError(t, svc.Start())
 	require.NotNil(t, src.fn, "Start must subscribe to device updates")
 	return svc, src.fn
+}
+
+// withPrev sets prev as the state dev's state replaced, as the z2m registry
+// does, and returns dev.
+func withPrev(dev *z2m.Device, prev *z2m.DeviceState) *z2m.Device {
+	dev.State.Prev = prev
+	return dev
+}
+
+// stateWithN returns the state {"n": n}.
+func stateWithN(n int) *z2m.DeviceState {
+	return &z2m.DeviceState{Raw: map[string]json.RawMessage{"n": json.RawMessage(fmt.Sprint(n))}}
 }
 
 func device(ieee, friendly string) *z2m.Device {
@@ -143,13 +175,53 @@ func TestUpdateRunsDeviceHandler(t *testing.T) {
 	}
 }
 
+// TestUpdatePassesPreviousStateToHandler checks that the previous state an
+// update carries reaches the handler as its prev argument, and that an update
+// without one gets null.
+func TestUpdatePassesPreviousStateToHandler(t *testing.T) {
+	const addr, name = "0x01", "lamp"
+	// The handler echoes the previous state's "state" prop, or "none".
+	src := `module.exports = { handle(ctx, state, prevState) {
+		ctx.z2m.publishProp("marker", "prev", prevState === null ? "none" : prevState.state);
+	} };`
+
+	cases := map[string]struct {
+		prev *z2m.DeviceState
+		want string
+	}{
+		"with previous state": {
+			prev: &z2m.DeviceState{Raw: map[string]json.RawMessage{"state": json.RawMessage(`"ON"`)}},
+			want: "ON",
+		},
+		"without previous state": {want: "none"},
+	}
+	for tcName, tc := range cases {
+		t.Run(tcName, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				z2mRec := &recordingZ2M{}
+				h, err := script.Compile(&script.Script{FileName: name + ".js", Content: src}, z2mRec, nil, 0)
+				require.NoError(t, err)
+				svc, deliver := serviceWith(t, handlerMap{addr: h})
+
+				deliver(withPrev(device(addr, name), tc.prev))
+				synctest.Wait()
+				svc.Shutdown()
+
+				require.Equal(t, []string{"marker.prev"}, z2mRec.recorded())
+				assert.Equal(t, tc.want, z2mRec.lastValue())
+			})
+		})
+	}
+}
+
 // The tests below run in a synctest bubble: synctest.Wait returns once every
 // other goroutine (workers, Shutdown) is blocked, so they assert on settled
 // state without sleeps or polling. A call that should return but blocks
 // forever deadlocks the bubble, which fails the test.
 
-// blockingZ2M blocks every publishProp until release is closed, so a test can
-// hold a handler in flight. entered is closed on the first call.
+// blockingZ2M records every publishProp, then blocks it until release is
+// closed, so a test can hold a handler in flight. entered is closed on the
+// first call.
 type blockingZ2M struct {
 	recordingZ2M
 	mu      sync.Mutex
@@ -163,7 +235,8 @@ func newBlockingZ2M() *blockingZ2M {
 	return &blockingZ2M{entered: make(chan struct{}), release: make(chan struct{})}
 }
 
-func (b *blockingZ2M) PublishProp(_, _ string, _ any) error {
+func (b *blockingZ2M) PublishProp(name, prop string, value any) error {
+	_ = b.recordingZ2M.PublishProp(name, prop, value)
 	b.mu.Lock()
 	b.calls++
 	b.mu.Unlock()
@@ -212,6 +285,34 @@ func TestUpdateDoesNotWaitForTheHandler(t *testing.T) {
 
 		close(z2mFake.release)
 		svc.Shutdown()
+	})
+}
+
+// TestQueuedRunKeepsItsPrevState checks that each run carries the previous
+// state of its own update, even when later updates arrive while it waits in
+// the queue.
+func TestQueuedRunKeepsItsPrevState(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const addr, name = "0x01", "lamp"
+		z2mFake := newBlockingZ2M()
+		h, err := script.Compile(&script.Script{FileName: name + ".js", Content: `module.exports = {
+			handle(ctx, state, prevState) { ctx.z2m.publishProp("marker", "prev", String(prevState.n)); }
+		};`}, z2mFake, nil, 0)
+		require.NoError(t, err)
+		svc, deliver := serviceWith(t, handlerMap{addr: h})
+
+		// The first run holds the worker, so the next two wait in the queue.
+		deliver(withPrev(deviceWithN(addr, name, 2), stateWithN(1)))
+		<-z2mFake.entered
+		deliver(withPrev(deviceWithN(addr, name, 3), stateWithN(2)))
+		deliver(withPrev(deviceWithN(addr, name, 4), stateWithN(3)))
+
+		close(z2mFake.release)
+		synctest.Wait()
+		svc.Shutdown()
+
+		assert.Equal(t, []any{"1", "2", "3"}, z2mFake.recordedValues(),
+			"each run must see the previous state of its own update")
 	})
 }
 

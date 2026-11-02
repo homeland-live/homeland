@@ -14,8 +14,10 @@ import (
 )
 
 // UpdateFunc is a device-update subscriber, called with the device whenever it
-// reports a new state.
-type UpdateFunc func(*Device)
+// reports a new state. dev.State.Prev is the stored state that one replaced
+// (never nil, since a device's first state doesn't propagate), so it always
+// directly precedes dev.State.
+type UpdateFunc func(dev *Device)
 
 // Client is a Zigbee2MQTT client. It tracks the device registry and device
 // states from the bridge topics and fans device updates out to subscribers.
@@ -272,12 +274,7 @@ func (c *Client) handleDeviceState(id string, payload []byte, retained bool) {
 		delete(raw, propAction)
 	}
 
-	propagate := c.registry.setState(id, NewDeviceState(raw))
-	if !propagate {
-		return
-	}
-
-	if dev := c.registry.device(id); dev != nil {
+	if dev := c.registry.setState(id, NewDeviceState(raw)); dev != nil {
 		c.notify(dev)
 	}
 }

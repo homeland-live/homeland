@@ -45,7 +45,7 @@ sequenceDiagram
     Z->>E: subscriber call (only if the update propagates)
     E->>D: EnqueueEvent (async, batched)
     E->>W: queue handler run (non-blocking)
-    W->>W: Handler.Handle: handle(ctx, state)
+    W->>W: Handler.Handle: handle(ctx, state, prevState)
 ```
 
 1. **Filtering** (`z2m`). The client subscribes to `#` under the base topic. The base topic itself, bridge topics it
@@ -60,13 +60,16 @@ sequenceDiagram
    `bridge/devices`, minus the properties z2m's `filtered_attributes` keep out of every publish. Those come from
    `bridge/info`'s config: a device's own list replaces the `device_options` one, as in z2m. A pattern Go's regexp
    can't compile (a JS-only lookahead, say) is logged and skipped, so its property stays required. The merged
-   options are served with each device, next to its spec and schema, and shown on the UI's device page.
+   options are served with each device, next to its spec and schema, and shown on the UI's device page. A state that
+   propagates carries a copy of the stored state it replaced (`DeviceState.Prev`, taken under the registry's lock
+   and without a previous state of its own, so only one is ever kept), which scripts get as `handle(ctx, state,
+   prevState)`'s `prevState`. Dropped states are never stored, so they are never a previous state.
 3. **Storage** (`db`). The event is queued for one background writer that inserts up to 100 rows per statement and
    flushes at least every 250ms. A full queue (1024) blocks rather than losing events.
 4. **Handler run** (`svc/event`). The run is queued on the device's own worker goroutine, so scripts never run on the
-   paho goroutine. A device's runs happen in order; devices run in parallel. A device's queue holds 64 runs; when it
-   is full, new updates for that device are dropped and logged. A broken handler (including a device with two scripts)
-   gets no run, since the API and UI already report its error.
+   paho goroutine. Each run carries the previous state its update arrived with, so later updates can't change what
+   it sees. A device's runs happen in order; devices run in parallel. A device's queue holds 64 runs; when it is
+   full, new updates for that device are dropped and logged.
 
 ## Scripts
 

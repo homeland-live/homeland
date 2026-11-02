@@ -182,7 +182,7 @@ export interface Z2MStateSchema {
 }
 
 // Handler describes a device's compiled script as the API serializes it.
-// `hasHandle` is true when the script exports a handle(ctx, state) function
+// `hasHandle` is true when the script exports a handle(ctx, state, prevState) function
 // (it reacts to device events); `jobCount` is how many jobs it exports (it
 // runs on a cron schedule). A script may do both. `error` is
 // set when the script failed to compile, in which case neither the handle nor
