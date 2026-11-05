@@ -8,7 +8,7 @@ we can agree on the approach. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) expla
 You need:
 
 - Go 1.27+ with CGO and a C compiler (the SQLite driver is `mattn/go-sqlite3`).
-- Node 24 for the UI and the docs example checks.
+- Node 26 for the UI and the docs example checks.
 - An MQTT broker with Zigbee2MQTT for running it for real. The example stack in [`docs/compose`](docs/compose)
   works; the tests need neither.
 

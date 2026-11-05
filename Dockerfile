@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 ARG GO_VERSION=1.27
 # keep in sync with ci.yml and docs.yml
-ARG NODE_VERSION=24.22
+ARG NODE_VERSION=26.13
 
 # CGO needs a C toolchain for the target, so this stage runs on each target
 # platform (under QEMU when it differs from the builder's).
