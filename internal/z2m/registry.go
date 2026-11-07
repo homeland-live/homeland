@@ -99,18 +99,23 @@ func (r *registry) replaceDevices(devices []DeviceSpec) {
 }
 
 // setState records a device's new state (devID is a friendly name or IEEE
-// address) and reports whether subscribers should be notified. A devID the
-// roster can't resolve yet keys the state as given (see replaceDevices).
+// address). When subscribers should be notified, it returns the device with
+// its new state; otherwise it returns nil. A devID the roster can't resolve
+// yet keys the state as given (see replaceDevices). A stored state's Prev is
+// a copy of the state it replaced, taken under the same lock, so the two
+// always form a consecutive pair. The replaced state itself is left
+// untouched, since earlier snapshots may still be reading it.
 //
-//   - The first state for a device is stored but does not propagate: it is
-//     the initial sync-up, not an event.
+//   - The first state for a device is stored, without a Prev, but does not
+//     propagate: it is the initial sync-up, not an event.
 //   - A state that fails Validate against the device's schema is neither
 //     stored nor propagated.
 //   - A state that IsDuplicate of the previous one is neither stored nor
 //     propagated.
 //
-// Any other state is stored and propagates.
-func (r *registry) setState(devID string, nextState *DeviceState) (propagate bool) {
+// Any other state is stored, and propagates once the roster knows the
+// device.
+func (r *registry) setState(devID string, nextState *DeviceState) *Device {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -118,7 +123,7 @@ func (r *registry) setState(devID string, nextState *DeviceState) (propagate boo
 	prevState, exists := r.states[addr]
 	if !exists {
 		r.states[addr] = nextState
-		return false
+		return nil
 	}
 
 	if err := nextState.Validate(r.schemas[addr]); err != nil {
@@ -127,7 +132,7 @@ func (r *registry) setState(devID string, nextState *DeviceState) (propagate boo
 			"state", nextState,
 			"err", err,
 		)
-		return false
+		return nil
 	}
 
 	if nextState.IsDuplicate(prevState) {
@@ -135,11 +140,12 @@ func (r *registry) setState(devID string, nextState *DeviceState) (propagate boo
 			"device", devID,
 			"state", nextState,
 		)
-		return false
+		return nil
 	}
 
+	nextState.Prev = prevState.withoutPrev()
 	r.states[addr] = nextState
-	return true
+	return r.deviceLocked(addr)
 }
 
 // setOptions swaps in the device options from the latest bridge/info's
@@ -212,8 +218,12 @@ func (r *registry) snapshot() []Device {
 func (r *registry) device(devID string) *Device {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.deviceLocked(r.addr(devID))
+}
 
-	addr := r.addr(devID)
+// deviceLocked returns the device with IEEE address addr, or nil when the
+// roster doesn't list it. The caller holds mu.
+func (r *registry) deviceLocked(addr string) *Device {
 	dev, ok := r.devices[addr]
 	if !ok {
 		return nil

@@ -74,8 +74,8 @@ module.exports = { handle };
 `), z2m, nil, 0)
 	require.NoError(t, err)
 
-	require.NoError(t, h.Handle(map[string]any{}))
-	require.NoError(t, h.Handle(map[string]any{}))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
+	require.NoError(t, h.Handle(map[string]any{}, nil))
 	require.Len(t, z2m.publishPropCalls, 2)
 	assert.Equal(t, "original", z2m.publishPropCalls[1].name)
 	assert.Empty(t, h.Jobs())
@@ -90,7 +90,7 @@ module.exports = { handle(ctx, state) { leaked = 1; } };
 `), nil, nil, 0)
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
-	assert.ErrorContains(t, h.Handle(map[string]any{}), "leaked is not defined")
+	assert.ErrorContains(t, h.Handle(map[string]any{}, nil), "leaked is not defined")
 }
 
 func TestNoHostGlobals(t *testing.T) {
@@ -201,7 +201,7 @@ func TestJobsOnlyScriptIgnoresEvents(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, h.Error)
 	assert.False(t, h.HasHandle)
-	assert.NoError(t, h.Handle(map[string]any{"action": "any"}), "a jobs-only handler must no-op on events")
+	assert.NoError(t, h.Handle(map[string]any{"action": "any"}, nil), "a jobs-only handler must no-op on events")
 }
 
 func TestThrowingExportGetterYieldsBrokenHandler(t *testing.T) {

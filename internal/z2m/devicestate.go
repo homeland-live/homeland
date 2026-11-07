@@ -23,6 +23,21 @@ type DeviceState struct {
 
 	// Raw is the state object as reported by the device.
 	Raw map[string]json.RawMessage `json:"-"`
+
+	// Prev is the stored state this one replaced, nil for a device's first
+	// state. It has no Prev of its own, so a stored state holds at most one
+	// previous state. The registry sets it before storing the state and
+	// never changes it afterwards.
+	Prev *DeviceState `json:"-"`
+}
+
+// withoutPrev returns a copy of state without its Prev, sharing Raw (never
+// modified once parsed), or nil for a nil state.
+func (state *DeviceState) withoutPrev() *DeviceState {
+	if state == nil {
+		return nil
+	}
+	return &DeviceState{ID: state.ID, CreatedAt: state.CreatedAt, Raw: state.Raw}
 }
 
 // Has reports whether the state carries prop.
