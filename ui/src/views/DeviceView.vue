@@ -275,9 +275,7 @@ function hideDataDialog() {
       <VCol cols="12" md="7" lg="8">
         <VCard height="100%">
           <VCardTitle class="d-flex align-center justify-space-between">
-            <div>
-              events <span class="text-medium-emphasis">({{ page.count }})</span>
-            </div>
+            <div>events <span class="text-medium-emphasis">({{ page.count }})</span></div>
             <BasePaginator :page="page" @change="load" />
           </VCardTitle>
           <VCardText>
