@@ -23,10 +23,12 @@ internal/
   healthcheck         composable health tree
   web, web/api        Fiber server, middleware, JSON API under /api/v1
   web/context         dependency container: builds, starts and stops everything
+  web/webtest         test-only: the API over a temp DB, a broker-less z2m client and test scripts
 ```
 
 Dependencies point one way: `mqtt` ← `z2m` ← `script` ← `svc/scripts` ← `svc/event`, `svc/scheduler` ←
-`web/context` ← `web/api`, `web` ← `cmd/server`. `config`, `db` and `healthcheck` are leaves. Services receive
+`web/context` ← `web/api`, `web` ← `cmd/server`. `config`, `db` and `healthcheck` are leaves; `mqtt/mqtttest` and
+`web/webtest` are imported by tests only. Services receive
 their dependencies, often as small interfaces declared by the consumer (`z2m.MQTTClient`, `event.Handlers`,
 `event.Z2M`, `event.Store`, `scheduler.Scripts`); only `web/context` constructs, connects and closes them. API
 handlers read from `web/context.Context` and hold no business logic.

@@ -4,96 +4,35 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
-	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
-	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/homeland-live/homeland/internal/config"
 	"github.com/homeland-live/homeland/internal/db"
-	"github.com/homeland-live/homeland/internal/mqtt/mqtttest"
-	"github.com/homeland-live/homeland/internal/svc/event"
-	"github.com/homeland-live/homeland/internal/svc/scripts"
-	"github.com/homeland-live/homeland/internal/web"
-	"github.com/homeland-live/homeland/internal/web/api"
-	webcontext "github.com/homeland-live/homeland/internal/web/context"
-	"github.com/homeland-live/homeland/internal/z2m"
+	"github.com/homeland-live/homeland/internal/web/webtest"
 )
 
 // lampRoster is a bridge/devices payload with a single device, "lamp" at
 // 0x01.
 var lampRoster = []byte(`[{"ieee_address":"0x01","friendly_name":"lamp"}]`)
 
-// newApp wires the API over a real (temp) DB and a z2m client fed through its
-// message path, and returns the fiber app plus the client and DB.
-func newApp(t *testing.T) (*fiber.App, *z2m.Client, *db.Repo) {
-	t.Helper()
-	return newAppWithScripts(t)
-}
-
-// newAppWithScripts is newApp with a started script service that has loaded
-// a working script for each of the given file names.
-func newAppWithScripts(t *testing.T, fileNames ...string) (*fiber.App, *z2m.Client, *db.Repo) {
-	t.Helper()
-
-	repo, err := db.New(&config.DB{Path: filepath.Join(t.TempDir(), "test.db")})
-	require.NoError(t, err)
-	t.Cleanup(repo.Close)
-
-	client, err := z2m.NewClient(nil, z2m.WithMQTT(&mqtttest.Client{Connected: true}))
-	require.NoError(t, err)
-
-	dir := t.TempDir()
-	for _, name := range fileNames {
-		src := []byte(`module.exports = { handle(ctx, state) {} };`)
-		require.NoError(t, os.WriteFile(filepath.Join(dir, name), src, 0o600))
-	}
-	svc := scripts.New(&config.Config{Scripts: &config.Scripts{Dir: dir}}, client)
-	require.NoError(t, svc.Start())
-	t.Cleanup(svc.Shutdown)
-
-	ctx := &webcontext.Context{
-		DB:      repo,
-		Z2M:     client,
-		Scripts: svc,
-		Events:  event.New(svc, client, repo),
-	}
-
-	app := fiber.New(fiber.Config{ErrorHandler: web.ErrorHandler})
-	api.New(ctx).Routes(app)
-	return app, client, repo
-}
-
 func TestListDeviceEventsDeviceWithoutState(t *testing.T) {
-	app, client, _ := newApp(t)
+	srv := webtest.NewServer(t)
 	// Known to the bridge, but has not reported any state yet.
-	client.Handle("bridge/devices", lampRoster)
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/0x01/events", nil))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	srv.HandleZ2M("bridge/devices", lampRoster)
 
 	var body map[string]json.RawMessage
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	srv.GetJSON(t, "/api/v1/z2m/devices/0x01/events", http.StatusOK, &body)
 	assert.JSONEq(t, `null`, string(body["state"]), "a device without state must serialize state as null")
 	assert.JSONEq(t, `[]`, string(body["events"]))
 }
 
 func TestListDeviceEventsDeviceWithState(t *testing.T) {
-	app, client, _ := newApp(t)
-	client.Handle("bridge/devices", lampRoster)
-	client.Handle("lamp", []byte(`{"state":"ON"}`))
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/0x01/events", nil))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	srv := webtest.NewServer(t)
+	srv.HandleZ2M("bridge/devices", lampRoster)
+	srv.HandleZ2M("lamp", []byte(`{"state":"ON"}`))
 
 	var body struct {
 		State *struct {
@@ -101,7 +40,7 @@ func TestListDeviceEventsDeviceWithState(t *testing.T) {
 			Props map[string]any `json:"props"`
 		} `json:"state"`
 	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	srv.GetJSON(t, "/api/v1/z2m/devices/0x01/events", http.StatusOK, &body)
 	require.NotNil(t, body.State)
 	assert.NotEmpty(t, body.State.ID)
 	assert.Equal(t, map[string]any{"state": "ON"}, body.State.Props)
@@ -110,25 +49,16 @@ func TestListDeviceEventsDeviceWithState(t *testing.T) {
 // TestDeviceRoutesOmitPrevState covers a device whose state has a previous
 // state: neither route serves it.
 func TestDeviceRoutesOmitPrevState(t *testing.T) {
-	app, client, _ := newApp(t)
-	client.Handle("bridge/devices", lampRoster)
-	client.Handle("lamp", []byte(`{"state":"ON"}`))
-	client.Handle("lamp", []byte(`{"state":"OFF"}`))
-	require.NotNil(t, client.DeviceState("lamp").Prev)
-
-	get := func(path string, body any) {
-		t.Helper()
-		resp, err := app.Test(httptest.NewRequest(http.MethodGet, path, nil))
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = resp.Body.Close() })
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(body))
-	}
+	srv := webtest.NewServer(t)
+	srv.HandleZ2M("bridge/devices", lampRoster)
+	srv.HandleZ2M("lamp", []byte(`{"state":"ON"}`))
+	srv.HandleZ2M("lamp", []byte(`{"state":"OFF"}`))
+	require.NotNil(t, srv.Ctx.Z2M.DeviceState("lamp").Prev)
 
 	var events struct {
 		State map[string]json.RawMessage `json:"state"`
 	}
-	get("/api/v1/z2m/devices/lamp/events", &events)
+	srv.GetJSON(t, "/api/v1/z2m/devices/lamp/events", http.StatusOK, &events)
 	assert.ElementsMatch(t, []string{"id", "createdAt", "props"}, slices.Collect(maps.Keys(events.State)))
 	assert.JSONEq(t, `{"state":"OFF"}`, string(events.State["props"]))
 
@@ -137,16 +67,16 @@ func TestDeviceRoutesOmitPrevState(t *testing.T) {
 			State json.RawMessage `json:"state"`
 		} `json:"devices"`
 	}
-	get("/api/v1/z2m/bridge/devices", &devices)
+	srv.GetJSON(t, "/api/v1/z2m/bridge/devices", http.StatusOK, &devices)
 	require.Len(t, devices.Devices, 1)
 	assert.JSONEq(t, `{"state":"OFF"}`, string(devices.Devices[0].State))
 }
 
 func TestListDeviceEventsByFriendlyNameOrAddress(t *testing.T) {
-	app, client, repo := newApp(t)
-	client.Handle("bridge/devices", lampRoster)
+	srv := webtest.NewServer(t)
+	srv.HandleZ2M("bridge/devices", lampRoster)
 	// Events are stored by IEEE address.
-	require.NoError(t, repo.CreateEvent(&db.Event{
+	require.NoError(t, srv.Ctx.DB.CreateEvent(&db.Event{
 		IEEEAddress: "0x01",
 		Payload:     map[string]json.RawMessage{"state": json.RawMessage(`"ON"`)},
 	}))
@@ -154,16 +84,11 @@ func TestListDeviceEventsByFriendlyNameOrAddress(t *testing.T) {
 	// Looking the device up by either id must return the same events.
 	for _, id := range []string{"0x01", "lamp"} {
 		t.Run(id, func(t *testing.T) {
-			resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/"+id+"/events", nil))
-			require.NoError(t, err)
-			t.Cleanup(func() { _ = resp.Body.Close() })
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-
 			var body struct {
 				Events []db.Event `json:"events"`
 				Page   db.Page    `json:"page"`
 			}
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+			srv.GetJSON(t, "/api/v1/z2m/devices/"+id+"/events", http.StatusOK, &body)
 			require.Len(t, body.Events, 1)
 			assert.Equal(t, "0x01", body.Events[0].IEEEAddress)
 			assert.Equal(t, 1, body.Page.Count)
@@ -172,43 +97,31 @@ func TestListDeviceEventsByFriendlyNameOrAddress(t *testing.T) {
 }
 
 func TestListDeviceEventsRejectsInvalidPage(t *testing.T) {
-	app, client, _ := newApp(t)
-	client.Handle("bridge/devices", lampRoster)
+	srv := webtest.NewServer(t)
+	srv.HandleZ2M("bridge/devices", lampRoster)
 
 	// A huge pagenum would overflow the offset and quietly serve page 1.
 	for _, query := range []string{"pagenum=0", "pagenum=1000001", "pagenum=922337203685477580", "pagesize=26"} {
 		t.Run(query, func(t *testing.T) {
-			resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/lamp/events?"+query, nil))
-			require.NoError(t, err)
-			t.Cleanup(func() { _ = resp.Body.Close() })
-			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			srv.GetStatus(t, "/api/v1/z2m/devices/lamp/events?"+query, http.StatusBadRequest)
 		})
 	}
 }
 
 func TestListDeviceEventsUnknownDevice(t *testing.T) {
-	app, _, _ := newApp(t)
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/nope/events", nil))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	srv := webtest.NewServer(t)
+	srv.GetStatus(t, "/api/v1/z2m/devices/nope/events", http.StatusNotFound)
 }
 
 func TestGetDeviceScriptByFriendlyNameOrAddress(t *testing.T) {
-	app, client, _ := newApp(t)
-	client.Handle("bridge/devices", lampRoster)
+	srv := webtest.NewServer(t)
+	srv.HandleZ2M("bridge/devices", lampRoster)
 
 	// The device has no script, so both fields are null for either id.
 	for _, id := range []string{"0x01", "lamp"} {
 		t.Run(id, func(t *testing.T) {
-			resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/"+id+"/script", nil))
-			require.NoError(t, err)
-			t.Cleanup(func() { _ = resp.Body.Close() })
-			require.Equal(t, http.StatusOK, resp.StatusCode)
-
 			var body map[string]json.RawMessage
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+			srv.GetJSON(t, "/api/v1/z2m/devices/"+id+"/script", http.StatusOK, &body)
 			assert.JSONEq(t, `null`, string(body["script"]))
 			assert.JSONEq(t, `null`, string(body["handler"]))
 		})
@@ -216,40 +129,28 @@ func TestGetDeviceScriptByFriendlyNameOrAddress(t *testing.T) {
 }
 
 func TestGetDeviceScriptUnknownDevice(t *testing.T) {
-	app, _, _ := newApp(t)
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/nope/script", nil))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	srv := webtest.NewServer(t)
+	srv.GetStatus(t, "/api/v1/z2m/devices/nope/script", http.StatusNotFound)
 }
 
 func TestDeviceRoutesDecodeEncodedFriendlyName(t *testing.T) {
-	app, client, _ := newApp(t)
+	srv := webtest.NewServer(t)
 	// Friendly names may hold spaces and slashes; clients percent-encode them.
-	client.Handle("bridge/devices", []byte(
+	srv.HandleZ2M("bridge/devices", []byte(
 		`[{"ieee_address":"0x01","friendly_name":"Living Room"},{"ieee_address":"0x02","friendly_name":"kitchen/light"}]`))
 
 	for _, id := range []string{"Living%20Room", "kitchen%2Flight"} {
 		for _, route := range []string{"events", "script"} {
 			t.Run(id+"/"+route, func(t *testing.T) {
-				resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/"+id+"/"+route, nil))
-				require.NoError(t, err)
-				t.Cleanup(func() { _ = resp.Body.Close() })
-				assert.Equal(t, http.StatusOK, resp.StatusCode)
+				srv.GetStatus(t, "/api/v1/z2m/devices/"+id+"/"+route, http.StatusOK)
 			})
 		}
 	}
 }
 
 func TestGetDeviceScriptReportsTwoScriptsConflict(t *testing.T) {
-	app, client, _ := newAppWithScripts(t, "0x01.js", "lamp.js")
-	client.Handle("bridge/devices", lampRoster)
-
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/lamp/script", nil))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = resp.Body.Close() })
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+	srv := webtest.NewServer(t, webtest.WithScripts("0x01.js", "lamp.js"))
+	srv.HandleZ2M("bridge/devices", lampRoster)
 
 	var body struct {
 		Script struct {
@@ -262,35 +163,74 @@ func TestGetDeviceScriptReportsTwoScriptsConflict(t *testing.T) {
 			} `json:"error"`
 		} `json:"handler"`
 	}
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	srv.GetJSON(t, "/api/v1/z2m/devices/lamp/script", http.StatusOK, &body)
 	assert.Contains(t, body.Handler.Error.Msg, "has two scripts, 0x01.js and lamp.js")
 	assert.False(t, body.Handler.HasHandle)
 	assert.Equal(t, "0x01.js", body.Script.FileName)
+}
+
+func TestGetDeviceScriptReportsBrokenScript(t *testing.T) {
+	const src = `module.exports = {`
+	srv := webtest.NewServer(t, webtest.WithScript("lamp.js", src))
+	srv.HandleZ2M("bridge/devices", lampRoster)
+
+	var body struct {
+		Script struct {
+			FileName string `json:"filename"`
+			Content  string `json:"content"`
+			DeviceID string `json:"deviceId"`
+		} `json:"script"`
+		Handler struct {
+			HasHandle bool `json:"hasHandle"`
+			JobCount  int  `json:"jobCount"`
+			Error     *struct {
+				Code int    `json:"code"`
+				Msg  string `json:"msg"`
+			} `json:"error"`
+		} `json:"handler"`
+	}
+	srv.GetJSON(t, "/api/v1/z2m/devices/0x01/script", http.StatusOK, &body)
+	assert.Equal(t, "lamp.js", body.Script.FileName)
+	assert.Equal(t, src, body.Script.Content)
+	assert.Equal(t, "lamp", body.Script.DeviceID)
+	assert.False(t, body.Handler.HasHandle)
+	assert.Zero(t, body.Handler.JobCount)
+	require.NotNil(t, body.Handler.Error, "a script that doesn't parse is a broken handler")
+	assert.Equal(t, http.StatusUnprocessableEntity, body.Handler.Error.Code)
+	assert.NotEmpty(t, body.Handler.Error.Msg)
+}
+
+func TestGetDeviceScriptReportsJobsOnlyScript(t *testing.T) {
+	srv := webtest.NewServer(t, webtest.WithScript("lamp.js",
+		`module.exports = { jobs: [{ cron: "0 18 * * *", run(ctx) {} }, { cron: "30 0 * * *", run(ctx) {} }] };`))
+	srv.HandleZ2M("bridge/devices", lampRoster)
+
+	var body struct {
+		Handler map[string]json.RawMessage `json:"handler"`
+	}
+	srv.GetJSON(t, "/api/v1/z2m/devices/lamp/script", http.StatusOK, &body)
+	assert.JSONEq(t, `false`, string(body.Handler["hasHandle"]))
+	assert.JSONEq(t, `2`, string(body.Handler["jobCount"]))
+	assert.NotContains(t, body.Handler, "error", "a working handler serializes no error")
 }
 
 // TestDeviceRoutesReturnOptions covers the options both device routes return:
 // the options z2m applies to the device, null until bridge/info arrives and
 // while none are set.
 func TestDeviceRoutesReturnOptions(t *testing.T) {
-	app, client, _ := newApp(t)
-	client.Handle("bridge/devices", lampRoster)
+	srv := webtest.NewServer(t)
+	srv.HandleZ2M("bridge/devices", lampRoster)
 
 	options := func(t *testing.T) (list, events json.RawMessage) {
 		t.Helper()
-		resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/bridge/devices", nil))
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = resp.Body.Close() })
 		var listBody struct {
 			Devices []map[string]json.RawMessage `json:"devices"`
 		}
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&listBody))
+		srv.GetJSON(t, "/api/v1/z2m/bridge/devices", http.StatusOK, &listBody)
 		require.Len(t, listBody.Devices, 1)
 
-		resp, err = app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/z2m/devices/lamp/events", nil))
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = resp.Body.Close() })
 		var eventsBody map[string]json.RawMessage
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&eventsBody))
+		srv.GetJSON(t, "/api/v1/z2m/devices/lamp/events", http.StatusOK, &eventsBody)
 		return listBody.Devices[0]["options"], eventsBody["options"]
 	}
 
@@ -298,13 +238,13 @@ func TestDeviceRoutesReturnOptions(t *testing.T) {
 	assert.JSONEq(t, `null`, string(list))
 	assert.JSONEq(t, `null`, string(events))
 
-	client.Handle("bridge/info", []byte(`{"version":"2.6.0","config":{"devices":{"0x01":{"friendly_name":"lamp"}}}}`))
+	srv.HandleZ2M("bridge/info", []byte(`{"version":"2.6.0","config":{"devices":{"0x01":{"friendly_name":"lamp"}}}}`))
 
 	list, events = options(t)
 	assert.JSONEq(t, `null`, string(list), "no options set")
 	assert.JSONEq(t, `null`, string(events), "no options set")
 
-	client.Handle("bridge/info", []byte(`{"version":"2.6.0","config":{
+	srv.HandleZ2M("bridge/info", []byte(`{"version":"2.6.0","config":{
 		"device_options":{"filtered_attributes":["battery"]},
 		"devices":{"0x01":{"filtered_attributes":["linkquality"]}}
 	}}`))
