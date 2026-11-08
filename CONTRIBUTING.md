@@ -45,7 +45,7 @@ The make targets cover `./cmd/...` and `./internal/...`. Plain `./...` also matc
   preconditions, `assert` for checks), use fakes instead of real brokers, and pass with `-race`. Prefer
   `assert.Eventually`/`Never` over sleeps. Shared helpers: `github.com/avakarev/go-util/testutil/slog` captures logs and
   `internal/mqtt/mqtttest` provides a broker-less MQTT client to build a z2m client over and a loopback broker for
-  a real paho client.
+  a real paho client, and `internal/web/webtest` serves the API over test dependencies for HTTP-level tests.
 - **Migrations** in `internal/db/migration.go` are append-only: never edit one that has shipped.
 - **Docs.** When behavior changes, update the README, [`docs/script.d.ts`](docs/script.d.ts) (the script author
   contract), and [`.env.example`](.env.example) for configuration. The example gallery in
