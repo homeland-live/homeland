@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/avakarev/go-util v1.13.4
-	github.com/dop251/goja v0.0.0-20261105002551-2413f2132ac8
+	github.com/dop251/goja v0.0.0-20261107161106-d6eaa50db8bc
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-co-op/gocron/v2 v2.23.0
