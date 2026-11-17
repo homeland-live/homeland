@@ -7,7 +7,7 @@ require (
 	github.com/dop251/goja v0.0.0-20261107161106-d6eaa50db8bc
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/fsnotify/fsnotify v1.10.1
-	github.com/go-co-op/gocron/v2 v2.23.0
+	github.com/go-co-op/gocron/v2 v2.23.1
 	github.com/go-gormigrate/gormigrate/v2 v2.1.7
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/google/uuid v1.6.0
