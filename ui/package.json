@@ -36,7 +36,7 @@
     "vuetify": "^4.3.3"
   },
   "devDependencies": {
-    "@tsconfig/node26": "^26.0.1",
+    "@tsconfig/node26": "^26.0.2",
     "@types/jsdom": "^30.0.0",
     "@types/luxon": "^3.7.6",
     "@types/node": "^26.6.6",
